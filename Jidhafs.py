@@ -327,7 +327,7 @@ with tab1:
     st.subheader("✂️ تقسيم ملف الاستجابات")
 
     uploaded_file = st.file_uploader(
-        "ارفعي ملف Excel الأصلي للاستجابات",
+        "ارفع ملف Excel الأصلي للاستجابات",
         type=["xlsx"],
         key="split_file"
     )
