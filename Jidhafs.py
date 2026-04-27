@@ -1,3 +1,26 @@
+import streamlit as st
+
+PASSWORD = "Jidhafs!1825"  # غيري الباسورد هنا
+
+def check_password():
+    def password_entered():
+        if st.session_state["password"] == PASSWORD:
+            st.session_state["password_correct"] = True
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.text_input("🔐 أدخلي كلمة المرور", type="password", on_change=password_entered, key="password")
+        return False
+    elif not st.session_state["password_correct"]:
+        st.text_input("🔐 أدخلي كلمة المرور", type="password", on_change=password_entered, key="password")
+        st.error("كلمة المرور غير صحيحة ❌")
+        return False
+    else:
+        return True
+
+if not check_password():
+    st.stop()
 import re
 import base64
 from pathlib import Path
@@ -182,7 +205,7 @@ def clean_header(header):
 
 
 def get_part_number(filename):
-    match = re.search(r"جزء[_\s-]*(\d+)", filename)
+    match = re.search(r"مظروف[\s_-]*(\d+)", filename)
     if match:
         return int(match.group(1))
     return 999999
@@ -191,6 +214,7 @@ def get_part_number(filename):
 def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False):
     excel_bytes.seek(0)
     wb = load_workbook(excel_bytes)
+    
     ws = wb.active
 
     header_fill = PatternFill("solid", fgColor="BFEFFF")
@@ -248,7 +272,14 @@ def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False):
                 ws.column_dimensions[col_letter].hidden = True
                 continue
         else:
-            if "feedback" in header_lower or header_lower in hidden_headers:
+            if (
+                "feedback" in header_lower
+                or header_lower in hidden_headers
+                or "بيانات الطالبة" in header_lower
+                or "اسم الطالبة" in header_lower
+                or "الرقم الأكاديمي" in header_lower
+                or "رقم الأكاديمي" in header_lower
+            ):
                 ws.column_dimensions[col_letter].hidden = True
                 continue
 
@@ -315,8 +346,24 @@ def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False):
 
     if lock_sheet:
         ws.protection.sheet = True
-        ws.protection.password = "1234"
+        ws.protection.password = "J1825"
+    # ===== حساب Total points كفورملا =====
+    total_col = None
+    point_cols = []
 
+    for col in range(1, ws.max_column + 1):
+        header = str(ws.cell(row=1, column=col).value or "").lower()
+
+        if "total points" in header:
+            total_col = col
+        elif "points" in header and "total points" not in header:
+            point_cols.append(col)
+
+    if total_col and point_cols:
+        for row in range(2, ws.max_row + 1):
+            cells = [ws.cell(row=row, column=col).coordinate for col in point_cols]
+            ws.cell(row=row, column=total_col).value = "=SUM(" + ",".join(cells) + ")"
+    # ==============================
     output = BytesIO()
     wb.save(output)
     output.seek(0)
@@ -365,7 +412,7 @@ with tab1:
 
                     file_number = (i // chunk_size) + 1
                     zip_file.writestr(
-                        f"جزء_{file_number}.xlsx",
+                        f"مظروف{file_number}.xlsx",
                         formatted_file.getvalue()
                     )
 
