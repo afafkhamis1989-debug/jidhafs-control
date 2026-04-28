@@ -353,7 +353,7 @@ with tab1:
         auto_hidden_columns = [col for col in all_columns if should_auto_hide(col)]
 
         extra_hidden_columns = st.multiselect(
-            "اختاري أي أعمدة إضافية تريدين إخفاءها قبل تنزيل الملفات",
+            "اختار أي أعمدة إضافية تريد إخفاءها قبل تنزيل الملفات",
             options=all_columns,
             default=[]
         )
