@@ -23,10 +23,10 @@ def check_password():
             st.session_state["password_correct"] = False
 
     if "password_correct" not in st.session_state:
-        st.text_input("🔐 أدخلي كلمة المرور", type="password", on_change=password_entered, key="password")
+        st.text_input("🔐 أدخل كلمة المرور", type="password", on_change=password_entered, key="password")
         return False
     elif not st.session_state["password_correct"]:
-        st.text_input("🔐 أدخلي كلمة المرور", type="password", on_change=password_entered, key="password")
+        st.text_input("🔐 أدخل كلمة المرور", type="password", on_change=password_entered, key="password")
         st.error("كلمة المرور غير صحيحة ❌")
         return False
     else:
@@ -303,6 +303,8 @@ def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False, extra_hid
     if lock_sheet:
         ws.protection.sheet = True
         ws.protection.password = "J1825"
+    
+
 
     output = BytesIO()
     wb.save(output)
@@ -312,9 +314,9 @@ def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False, extra_hid
 
 with tab1:
     st.markdown("<h3 style='text-align:center;'>✂️ تقسيم ملف الاستجابات</h3>", unsafe_allow_html=True)
-
+    
     uploaded_file = st.file_uploader(
-        "ارفعي ملف Excel الأصلي للاستجابات",
+        "ارفع ملف Excel الأصلي للاستجابات",
         type=["xlsx"],
         key="split_file"
     )
@@ -390,7 +392,14 @@ with tab1:
                 file_name="split_files.zip",
                 mime="application/zip"
             )
-
+            st.markdown("""
+            <div style='text-align: right; margin-top: 60px;'>
+            <hr style="width:200px; float:right;">
+            <br>
+            <span style='font-weight:bold;'>رئيسة المركز</span><br>
+            أ. خلود يعقوب بدو
+            </div>
+""", unsafe_allow_html=True)
 
 with tab2:
     st.markdown("<h3 style='text-align:center;'>📥 تجميع ملفات الاستجابات المقسمة</h3>", unsafe_allow_html=True)
