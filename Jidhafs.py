@@ -413,7 +413,7 @@ with tab2:
     st.markdown("<h3 style='text-align:center;'>📥 تجميع ملفات الاستجابات المقسمة</h3>", unsafe_allow_html=True)
 
     uploaded_files = st.file_uploader(
-        "ارفعي ملفات Excel المقسمة",
+        "ارفع ملفات Excel المقسمة",
         type=["xlsx"],
         accept_multiple_files=True,
         key="merge_files"
