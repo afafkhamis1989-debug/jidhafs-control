@@ -310,7 +310,22 @@ def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False, extra_hid
     wb.save(output)
     output.seek(0)
     return output
+st.markdown("""
+<style>
+.signature {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    font-weight: bold;
+    font-size: 14px;
+    z-index: 9999;
+}
+</style>
 
+<div class="signature">
+رئيسة المركز: أ. خلود يعقوب بدو
+</div>
+""", unsafe_allow_html=True)
 
 with tab1:
     st.markdown("<h3 style='text-align:center;'>✂️ تقسيم ملف الاستجابات</h3>", unsafe_allow_html=True)
@@ -392,14 +407,7 @@ with tab1:
                 file_name="split_files.zip",
                 mime="application/zip"
             )
-            st.markdown("""
-            <div style='text-align: left; margin-top: 60px;'>
-            <hr style="width:200px; float:left;">
-            <br>
-            <span style='font-weight:bold;'>رئيسة المركز</span><br>
-            أ. خلود يعقوب بدو
-            </div>
-""", unsafe_allow_html=True)
+            
 
 with tab2:
     st.markdown("<h3 style='text-align:center;'>📥 تجميع ملفات الاستجابات المقسمة</h3>", unsafe_allow_html=True)
