@@ -393,8 +393,8 @@ with tab1:
                 mime="application/zip"
             )
             st.markdown("""
-            <div style='text-align: right; margin-top: 60px;'>
-            <hr style="width:200px; float:right;">
+            <div style='text-align: left; margin-top: 60px;'>
+            <hr style="width:200px; float:left;">
             <br>
             <span style='font-weight:bold;'>رئيسة المركز</span><br>
             أ. خلود يعقوب بدو
