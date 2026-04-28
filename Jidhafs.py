@@ -1,6 +1,19 @@
-import streamlit as st
+import re
+import base64
+from pathlib import Path
+from io import BytesIO
+from zipfile import ZipFile
 
-PASSWORD = "Jidhafs!1825"  # غيري الباسورد هنا
+import streamlit as st
+import pandas as pd
+from openpyxl import load_workbook
+from openpyxl.styles import Alignment, Font, PatternFill, Border, Side, Protection
+
+
+st.set_page_config(page_title="مركز التصحيح المركزي", layout="wide")
+
+PASSWORD = "Jidhafs!1825"
+
 
 def check_password():
     def password_entered():
@@ -19,21 +32,9 @@ def check_password():
     else:
         return True
 
+
 if not check_password():
     st.stop()
-import re
-import base64
-from pathlib import Path
-from io import BytesIO
-from zipfile import ZipFile
-
-import streamlit as st
-import pandas as pd
-from openpyxl import load_workbook
-from openpyxl.styles import Alignment, Font, PatternFill, Border, Side, Protection
-
-
-st.set_page_config(page_title="مركز التصحيح المركزي", layout="wide")
 
 
 def get_logo_base64():
@@ -45,20 +46,11 @@ def get_logo_base64():
 
 
 logo_base64 = get_logo_base64()
-
 logo_html = ""
+
 if logo_base64:
     logo_html = f'<img src="data:image/png;base64,{logo_base64}" class="logo-img">'
-st.markdown("""
-<style>
 
-/* توسيط جميع عناوين Streamlit */
-[data-testid="stMarkdownContainer"] h3 {
-    text-align: center !important;
-}
-
-</style>
-""", unsafe_allow_html=True)
 
 st.markdown(f"""
 <style>
@@ -90,92 +82,47 @@ st.markdown(f"""
     line-height:1.5;
     font-weight:800;
 }}
+
+html, body, [class*="css"] {{
+    direction: rtl;
+    text-align: right;
+    font-size: 20px !important;
+}}
+
+button[data-baseweb="tab"] {{
+    direction: rtl;
+    text-align: right;
+    font-size: 20px !important;
+}}
+
+label, .stTextInput, .stNumberInput, .stFileUploader {{
+    font-size: 20px !important;
+    text-align: right;
+}}
+
+.stButton button {{
+    font-size: 20px !important;
+    padding: 10px 20px;
+}}
+
+[data-testid="stMarkdownContainer"] h3 {{
+    text-align: center !important;
+}}
+
+.stDataFrame {{
+    direction: rtl;
+    font-size: 20px !important;
+}}
 </style>
 
 <div class="jidhafs-title">
     {logo_html}
     <h1>
-        مركز التصحيح المركزي بمدرسة جدحفص
-        الثانوية للبنات
+        مركز التصحيح المركزي بمدرسة جدحفص الثانوية للبنات
     </h1>
 </div>
 """, unsafe_allow_html=True)
-st.markdown("""
-<style>
 
-/* جعل التطبيق كله من اليمين */
-html, body, [class*="css"]  {
-    direction: rtl;
-    text-align: right;
-}
-
-/* التبويبات من اليمين */
-button[data-baseweb="tab"] {
-    direction: rtl;
-    text-align: right;
-}
-
-/* الفورم */
-label, .stFileUploader, .stNumberInput {
-    text-align: right;
-}
-
-/* الأزرار */
-.stButton > button {
-    float: right;
-}
-
-/* الجدول */
-.stDataFrame {
-    direction: rtl;
-}
-
-/* العنوان يبقى في النص */
-.jidhafs-title {
-    direction: rtl;
-    text-align: center;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<style>
-
-/* تكبير النص العام */
-html, body, [class*="css"] {
-    font-size: 20px !important;
-}
-
-/* عناوين الأقسام */
-h2, h3 {
-    font-size: 26px !important;
-    font-weight: bold;
-}
-
-/* التبويبات */
-button[data-baseweb="tab"] {
-    font-size: 20px !important;
-}
-
-/* النصوص داخل الفورم */
-label, .stTextInput, .stNumberInput, .stFileUploader {
-    font-size: 20px !important;
-}
-
-/* الأزرار */
-.stButton button {
-    font-size: 20px !important;
-    padding: 10px 20px;
-}
-
-/* الجدول */
-.stDataFrame {
-    font-size: 20px !important;
-}
-
-</style>
-""", unsafe_allow_html=True)
 
 tab1, tab2 = st.tabs(["✂️ تقسيم الاستجابات", "📥 تجميع الاستجابات"])
 
@@ -204,17 +151,34 @@ def clean_header(header):
     return header
 
 
+def should_auto_hide(header):
+    header_lower = clean_header(header).lower()
+
+    return (
+        "feedback" in header_lower
+        or header_lower in hidden_headers
+        or "بيانات الطالبة" in header_lower
+        or "اسم الطالبة" in header_lower
+        or "الرقم الأكاديمي" in header_lower
+        or "رقم الأكاديمي" in header_lower
+    )
+
+
 def get_part_number(filename):
-    match = re.search(r"مظروف[\s_-]*(\d+)", filename)
+    match = re.search(r"(?:مظروف|جزء)[\s_-]*(\d+)", filename)
     if match:
         return int(match.group(1))
     return 999999
 
 
-def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False):
+def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False, extra_hidden_columns=None):
+    if extra_hidden_columns is None:
+        extra_hidden_columns = []
+
+    extra_hidden_columns = [clean_header(c) for c in extra_hidden_columns]
+
     excel_bytes.seek(0)
     wb = load_workbook(excel_bytes)
-    
     ws = wb.active
 
     header_fill = PatternFill("solid", fgColor="BFEFFF")
@@ -270,16 +234,8 @@ def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False):
         if merge_mode:
             if header_lower == "رقم":
                 ws.column_dimensions[col_letter].hidden = True
-                continue
         else:
-            if (
-                "feedback" in header_lower
-                or header_lower in hidden_headers
-                or "بيانات الطالبة" in header_lower
-                or "اسم الطالبة" in header_lower
-                or "الرقم الأكاديمي" in header_lower
-                or "رقم الأكاديمي" in header_lower
-            ):
+            if header in extra_hidden_columns or should_auto_hide(header):
                 ws.column_dimensions[col_letter].hidden = True
                 continue
 
@@ -347,23 +303,7 @@ def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False):
     if lock_sheet:
         ws.protection.sheet = True
         ws.protection.password = "J1825"
-    # ===== حساب Total points كفورملا =====
-    total_col = None
-    point_cols = []
 
-    for col in range(1, ws.max_column + 1):
-        header = str(ws.cell(row=1, column=col).value or "").lower()
-
-        if "total points" in header:
-            total_col = col
-        elif "points" in header and "total points" not in header:
-            point_cols.append(col)
-
-    if total_col and point_cols:
-        for row in range(2, ws.max_row + 1):
-            cells = [ws.cell(row=row, column=col).coordinate for col in point_cols]
-            ws.cell(row=row, column=total_col).value = "=SUM(" + ",".join(cells) + ")"
-    # ==============================
     output = BytesIO()
     wb.save(output)
     output.seek(0)
@@ -371,10 +311,10 @@ def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False):
 
 
 with tab1:
-    st.subheader("✂️ تقسيم ملف الاستجابات")
+    st.markdown("<h3 style='text-align:center;'>✂️ تقسيم ملف الاستجابات</h3>", unsafe_allow_html=True)
 
     uploaded_file = st.file_uploader(
-        "ارفع ملف Excel الأصلي للاستجابات",
+        "ارفعي ملف Excel الأصلي للاستجابات",
         type=["xlsx"],
         key="split_file"
     )
@@ -382,7 +322,7 @@ with tab1:
     chunk_size = st.number_input(
         "عدد الاستجابات في كل ملف",
         min_value=1,
-        value=25,
+        value=10,
         step=1
     )
 
@@ -390,9 +330,34 @@ with tab1:
         df = pd.read_excel(uploaded_file)
 
         st.success(f"تم رفع الملف بنجاح، عدد الاستجابات: {len(df)}")
-        st.dataframe(df.head())
 
-        if st.button("تقسيم الاستجابات"):
+        all_columns = list(df.columns)
+
+        auto_hidden_columns = [col for col in all_columns if should_auto_hide(col)]
+
+        extra_hidden_columns = st.multiselect(
+            "اختاري أي أعمدة إضافية تريدين إخفاءها قبل تنزيل الملفات",
+            options=all_columns,
+            default=[]
+        )
+
+        hidden_preview_columns = set(auto_hidden_columns + extra_hidden_columns)
+
+        preview_chunk = df.iloc[0:chunk_size].copy()
+        preview_chunk.insert(0, "رقم", range(1, len(preview_chunk) + 1))
+
+        visible_preview_columns = [
+            col for col in preview_chunk.columns
+            if col not in hidden_preview_columns
+        ]
+
+        st.markdown("<h4 style='text-align:center;'>👁️ معاينة أول مظروف بعد الإخفاء</h4>", unsafe_allow_html=True)
+        st.dataframe(preview_chunk[visible_preview_columns], use_container_width=True)
+
+        if auto_hidden_columns:
+            st.info("الأعمدة التي سيخفيها التطبيق تلقائيًا: " + "، ".join(auto_hidden_columns))
+
+        if st.button("تقسيم الاستجابات وتنزيل الملفات"):
             zip_buffer = BytesIO()
 
             with ZipFile(zip_buffer, "w") as zip_file:
@@ -407,12 +372,13 @@ with tab1:
                     formatted_file = format_excel_file(
                         excel_buffer,
                         lock_sheet=True,
-                        merge_mode=False
+                        merge_mode=False,
+                        extra_hidden_columns=extra_hidden_columns
                     )
 
                     file_number = (i // chunk_size) + 1
                     zip_file.writestr(
-                        f"مظروف{file_number}.xlsx",
+                        f"مظروف_{file_number}.xlsx",
                         formatted_file.getvalue()
                     )
 
@@ -427,7 +393,7 @@ with tab1:
 
 
 with tab2:
-    st.subheader("📥 تجميع ملفات الاستجابات المقسمة")
+    st.markdown("<h3 style='text-align:center;'>📥 تجميع ملفات الاستجابات المقسمة</h3>", unsafe_allow_html=True)
 
     uploaded_files = st.file_uploader(
         "ارفعي ملفات Excel المقسمة",
@@ -448,7 +414,7 @@ with tab2:
         combined = pd.concat(all_data, ignore_index=True)
 
         st.success(f"تم رفع وتجميع {len(uploaded_files)} ملف")
-        st.dataframe(combined.head())
+        st.dataframe(combined.head(), use_container_width=True)
 
         if st.button("تجميع وتنزيل الملف"):
             output_excel = BytesIO()
