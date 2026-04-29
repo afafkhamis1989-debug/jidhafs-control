@@ -727,7 +727,7 @@ with tab1:
         st.markdown("### 🟩 تحديد درجات الأسئلة")
 
         # لا نعتمد على أعلى درجة في الاستجابات كدرجة كبرى؛ لأنها قد تكون درجة طالبة فقط.
-        # نعتمد أولًا على القالب المحفوظ، ثم نحاول قراءة الدرجة الظاهرة في نص السؤال، والناقص يدخله المستخدم.
+        # نحاول قراءة الدرجة الظاهرة في نص السؤال فقط، والناقص يترك
         detected_scores, unknown_points = detect_max_scores_from_data(df)
         templates = load_grade_templates()
         signature = get_file_signature(df)
@@ -780,7 +780,6 @@ with tab1:
                     st.markdown(f"**{idx}. عمود الدرجة:** `{item['عمود الدرجة']}`")
                     st.caption(f"السؤال المرتبط: {item['السؤال']}")
                     st.caption(f"مصدر الدرجة الحالية: {item['المصدر']}")
-                    st.caption(f"أعلى درجة موجودة في ملف الاستجابات فقط للمراجعة: {item['أعلى درجة موجودة في الملف']}")
                     score = st.number_input(
                         "الدرجة الكبرى",
                         min_value=0.0,
