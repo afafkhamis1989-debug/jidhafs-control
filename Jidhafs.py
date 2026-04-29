@@ -727,7 +727,7 @@ with tab1:
         st.markdown("### 🟩 تحديد درجات الأسئلة")
 
         # لا نعتمد على أعلى درجة في الاستجابات كدرجة كبرى؛ لأنها قد تكون درجة طالبة فقط.
-        # نحاول قراءة الدرجة الظاهرة في نص السؤال فقط، والناقص يترك
+        # نحاول قراءة الدرجة الظاهرة في نص السؤال فقط، والناقص يترك 0.00 ليدخله المستخدم من الإجابة النموذجية.
         detected_scores, unknown_points = detect_max_scores_from_data(df)
         templates = load_grade_templates()
         signature = get_file_signature(df)
@@ -750,6 +750,9 @@ with tab1:
                 elif visible_score is not None:
                     default_value = visible_score
                     source = "درجة ظاهرة في السؤال"
+                elif detected_value is not None and float(detected_value) > 0:
+                    default_value = detected_value
+                    source = "درجة تلقائية من عمود Points"
                 else:
                     default_value = 0
                     source = "مدخل من المستخدم"
@@ -769,7 +772,7 @@ with tab1:
             max_scores = {}
             can_split = False
         else:
-            st.info("البرنامج يضع الدرجة الظاهرة في نص السؤال تلقائيًا، والدرجات غير الظاهرة تدخلينها يدويًا. بعد ذلك يجمع الدرجات كلها للمراجعة.")
+            st.info("البرنامج يضع الدرجات التلقائية الموجودة في أعمدة Points داخل خانة الدرجة الكبرى، وأي سؤال لا توجد له درجة تلقائية يبقى 0.00 لتدخلين درجته من الإجابة النموذجية.")
             max_scores = {}
 
             for idx, item in enumerate(all_points_items, start=1):
