@@ -861,7 +861,7 @@ with tab1:
                     st.error("يجب كتابة الدرجة الكبرى لكل أعمدة Points قبل الحفظ.")
 
             if not can_split:
-                st.warning("باقي من الأعمدة بدون درجة كبرى: " + "، ".join(missing_scores))
+                st.warning("باقي من الupdateأعمدة بدون درجة كبرى: " + "، ".join(missing_scores))
 
         if max_scores:
             total_exam_score = sum(float(v) for v in max_scores.values())
