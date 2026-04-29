@@ -1,40 +1,68 @@
 import re
+import json
 import base64
+import hashlib
 from pathlib import Path
 from io import BytesIO
 from zipfile import ZipFile
+from datetime import datetime
 
 import streamlit as st
 import pandas as pd
+import requests
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill, Border, Side, Protection
+from openpyxl.worksheet.datavalidation import DataValidation
 
 
+# =========================
+# إعدادات عامة
+# =========================
 st.set_page_config(page_title="مركز التصحيح المركزي", layout="wide")
 
-PASSWORD = "Jidhafs!1825"
+APP_DATA_DIR = Path.home() / "Jidhafs_Control_Center_Data"
+APP_DATA_DIR.mkdir(exist_ok=True)
+
+LOCAL_REPORT_FILE = APP_DATA_DIR / "reports.xlsx"
+GRADE_TEMPLATES_FILE = APP_DATA_DIR / "grade_templates.json"
+
+# ضعي رابط Google Apps Script هنا لاحقًا
+GOOGLE_SCRIPT_URL = "PUT_YOUR_GOOGLE_SCRIPT_URL_HERE"
+
+# كلمة مرور الأدمن
+ADMIN_PASSWORD = "Jidhafs!1825"
+
+# كلمة مرور موحدة للمستخدمين العاديين
+USER_PASSWORD = "1234"
 
 
-def check_password():
-    def password_entered():
-        if st.session_state["password"] == PASSWORD:
-            st.session_state["password_correct"] = True
-        else:
-            st.session_state["password_correct"] = False
-
-    if "password_correct" not in st.session_state:
-        st.text_input("🔐 أدخل كلمة المرور", type="password", on_change=password_entered, key="password")
-        return False
-    elif not st.session_state["password_correct"]:
-        st.text_input("🔐 أدخل كلمة المرور", type="password", on_change=password_entered, key="password")
-        st.error("كلمة المرور غير صحيحة ❌")
-        return False
-    else:
-        return True
+# =========================
+# أدوات مساعدة
+# =========================
+def clean_header(header):
+    header = str(header or "")
+    header = header.replace("\xa0", " ")
+    header = " ".join(header.split())
+    return header
 
 
-if not check_password():
-    st.stop()
+def safe_filename(name):
+    name = clean_header(name)
+    name = re.sub(r'[\\/:*?"<>|]', "-", name)
+    return name.strip() or "ملف"
+
+
+def arabic_day_name(dt):
+    days = {
+        "Saturday": "السبت",
+        "Sunday": "الأحد",
+        "Monday": "الإثنين",
+        "Tuesday": "الثلاثاء",
+        "Wednesday": "الأربعاء",
+        "Thursday": "الخميس",
+        "Friday": "الجمعة",
+    }
+    return days.get(dt.strftime("%A"), dt.strftime("%A"))
 
 
 def get_logo_base64():
@@ -45,88 +73,162 @@ def get_logo_base64():
     return None
 
 
-logo_base64 = get_logo_base64()
-logo_html = ""
-
-if logo_base64:
-    logo_html = f'<img src="data:image/png;base64,{logo_base64}" class="logo-img">'
-
-
-st.markdown(f"""
-<style>
-.block-container {{
-    max-width: 1200px;
-    margin: auto;
-    padding-top: 2rem;
-}}
-
-.jidhafs-title {{
-    max-width: 1100px;
-    margin: 30px auto 35px auto;
-    padding: 35px 25px 45px 25px;
-    background-color:#eaf6ff;
-    border-radius:12px;
-    text-align:center;
-}}
-
-.logo-img {{
-    height: 90px;
-    width: auto;
-    margin-bottom: 15px;
-}}
-
-.jidhafs-title h1 {{
-    color:#15396b;
-    margin:0;
-    font-size:38px;
-    line-height:1.5;
-    font-weight:800;
-}}
-
-html, body, [class*="css"] {{
-    direction: rtl;
-    text-align: right;
-    font-size: 20px !important;
-}}
-
-button[data-baseweb="tab"] {{
-    direction: rtl;
-    text-align: right;
-    font-size: 20px !important;
-}}
-
-label, .stTextInput, .stNumberInput, .stFileUploader {{
-    font-size: 20px !important;
-    text-align: right;
-}}
-
-.stButton button {{
-    font-size: 20px !important;
-    padding: 10px 20px;
-}}
-
-[data-testid="stMarkdownContainer"] h3 {{
-    text-align: center !important;
-}}
-
-.stDataFrame {{
-    direction: rtl;
-    font-size: 20px !important;
-}}
-</style>
-
-<div class="jidhafs-title">
-    {logo_html}
-    <h1>
-        مركز التصحيح المركزي بمدرسة جدحفص الثانوية للبنات
-    </h1>
-</div>
-""", unsafe_allow_html=True)
+def load_grade_templates():
+    if GRADE_TEMPLATES_FILE.exists():
+        try:
+            with open(GRADE_TEMPLATES_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
 
 
-tab1, tab2 = st.tabs(["✂️ تقسيم الاستجابات", "📥 تجميع الاستجابات"])
+def save_grade_templates(templates):
+    with open(GRADE_TEMPLATES_FILE, "w", encoding="utf-8") as f:
+        json.dump(templates, f, ensure_ascii=False, indent=2)
 
 
+def get_file_signature(df):
+    cols = "||".join([clean_header(c) for c in df.columns])
+    return hashlib.md5(cols.encode("utf-8")).hexdigest()
+
+
+# =========================
+# تسجيل الدخول
+# =========================
+def login_screen():
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+        st.session_state.role = None
+        st.session_state.username = None
+
+    if st.session_state.logged_in:
+        return True
+
+    st.markdown("<h2 style='text-align:center;'>🔐 تسجيل الدخول</h2>", unsafe_allow_html=True)
+
+    role = st.radio("نوع الدخول", ["مستخدم", "أدمن"], horizontal=True)
+
+    if role == "مستخدم":
+        username = st.text_input("اسم المستخدم / اسم المعلمة")
+        password = st.text_input("كلمة المرور", type="password")
+
+        if st.button("دخول"):
+            if username.strip() and password == USER_PASSWORD:
+                st.session_state.logged_in = True
+                st.session_state.role = "user"
+                st.session_state.username = username.strip()
+                st.rerun()
+            else:
+                st.error("الاسم أو كلمة المرور غير صحيحة ❌")
+
+    else:
+        username = st.text_input("اسم الأدمن", value="Admin")
+        password = st.text_input("كلمة مرور الأدمن", type="password")
+
+        if st.button("دخول الأدمن"):
+            if password == ADMIN_PASSWORD:
+                st.session_state.logged_in = True
+                st.session_state.role = "admin"
+                st.session_state.username = username.strip() or "Admin"
+                st.rerun()
+            else:
+                st.error("كلمة مرور الأدمن غير صحيحة ❌")
+
+    return False
+
+
+# =========================
+# التقرير المحلي + Google Sheet
+# =========================
+def append_local_report(record):
+    columns = [
+        "اليوم",
+        "التاريخ",
+        "الساعة",
+        "اسم المستخدم",
+        "نوع المستخدم",
+        "نوع العملية",
+        "اسم الملف الأصلي",
+        "اسم الملف الجديد",
+        "أسماء الأجزاء",
+        "عدد الأجزاء",
+        "عدد الاستجابات",
+        "عدد الاستجابات في كل جزء",
+        "هل تم التقسيم",
+        "هل تم التجميع",
+        "اسم ملف التجميع",
+        "الحالة",
+        "ملاحظات",
+    ]
+
+    df_new = pd.DataFrame([record], columns=columns)
+
+    if LOCAL_REPORT_FILE.exists():
+        try:
+            df_old = pd.read_excel(LOCAL_REPORT_FILE)
+            df_all = pd.concat([df_old, df_new], ignore_index=True)
+        except Exception:
+            df_all = df_new
+    else:
+        df_all = df_new
+
+    df_all.to_excel(LOCAL_REPORT_FILE, index=False)
+
+
+def send_report_to_google(record):
+    if not GOOGLE_SCRIPT_URL or GOOGLE_SCRIPT_URL == "PUT_YOUR_GOOGLE_SCRIPT_URL_HERE":
+        return False
+
+    try:
+        response = requests.post(GOOGLE_SCRIPT_URL, json=record, timeout=8)
+        return response.status_code in [200, 201]
+    except Exception:
+        return False
+
+
+def log_operation(
+    operation_type,
+    original_file="",
+    new_file_name="",
+    part_names=None,
+    part_count=0,
+    response_count=0,
+    responses_per_part="",
+    split_done="لا",
+    merge_done="لا",
+    merged_file_name="",
+    status="تم",
+    notes="",
+):
+    now = datetime.now()
+    record = {
+        "اليوم": arabic_day_name(now),
+        "التاريخ": now.strftime("%Y-%m-%d"),
+        "الساعة": now.strftime("%H:%M:%S"),
+        "اسم المستخدم": st.session_state.get("username", ""),
+        "نوع المستخدم": st.session_state.get("role", ""),
+        "نوع العملية": operation_type,
+        "اسم الملف الأصلي": original_file,
+        "اسم الملف الجديد": new_file_name,
+        "أسماء الأجزاء": "، ".join(part_names or []),
+        "عدد الأجزاء": part_count,
+        "عدد الاستجابات": response_count,
+        "عدد الاستجابات في كل جزء": responses_per_part,
+        "هل تم التقسيم": split_done,
+        "هل تم التجميع": merge_done,
+        "اسم ملف التجميع": merged_file_name,
+        "الحالة": status,
+        "ملاحظات": notes,
+    }
+
+    append_local_report(record)
+    send_report_to_google(record)
+
+
+# =========================
+# إعدادات الأعمدة والدرجات
+# =========================
 hidden_headers = [
     "id",
     "start time",
@@ -144,16 +246,8 @@ hidden_headers = [
 ]
 
 
-def clean_header(header):
-    header = str(header or "")
-    header = header.replace("\xa0", " ")
-    header = " ".join(header.split())
-    return header
-
-
 def should_auto_hide(header):
     header_lower = clean_header(header).lower()
-
     return (
         "feedback" in header_lower
         or header_lower in hidden_headers
@@ -164,16 +258,114 @@ def should_auto_hide(header):
     )
 
 
-def get_part_number(filename):
-    match = re.search(r"(?:مظروف|جزء)[\s_-]*(\d+)", filename)
-    if match:
-        return int(match.group(1))
-    return 999999
+def is_points_column(header):
+    header_lower = clean_header(header).lower()
+    return (
+        "points" in header_lower
+        and header_lower != "total points"
+        and header_lower not in [
+            "points - الاسم الرباعي",
+            "points - الرقم الأكاديمي",
+            "points - الشعبة",
+        ]
+    )
 
 
-def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False, extra_hidden_columns=None):
+def find_related_question(points_header, all_headers):
+    points_header_clean = clean_header(points_header)
+    lower = points_header_clean.lower()
+
+    possible_question = re.sub(r"^points\s*-\s*", "", points_header_clean, flags=re.IGNORECASE).strip()
+    if possible_question and possible_question != points_header_clean:
+        for h in all_headers:
+            if clean_header(h) == possible_question:
+                return clean_header(h)
+        return possible_question
+
+    return points_header_clean
+
+
+def detect_max_scores_from_data(df):
+    max_scores = {}
+    unknown_points = []
+    all_headers = list(df.columns)
+
+    for col in df.columns:
+        header = clean_header(col)
+        if not is_points_column(header):
+            continue
+
+        values = pd.to_numeric(df[col], errors="coerce").dropna()
+        if len(values) > 0:
+            max_value = float(values.max())
+            if max_value > 0:
+                if max_value.is_integer():
+                    max_value = int(max_value)
+                max_scores[header] = max_value
+            else:
+                unknown_points.append({
+                    "عمود الدرجة": header,
+                    "السؤال": find_related_question(header, all_headers),
+                    "الدرجة الكبرى": None,
+                })
+        else:
+            unknown_points.append({
+                "عمود الدرجة": header,
+                "السؤال": find_related_question(header, all_headers),
+                "الدرجة الكبرى": None,
+            })
+
+    return max_scores, unknown_points
+
+
+def update_points_headers_with_max(ws, max_scores):
+    for col in ws.columns:
+        cell = col[0]
+        header = clean_header(cell.value)
+        if header in max_scores:
+            if "الدرجة من" not in header:
+                cell.value = f"{header} / الدرجة من {max_scores[header]}"
+
+
+def add_score_validation(ws, max_scores):
+    for col in ws.columns:
+        col_letter = col[0].column_letter
+        header = clean_header(col[0].value)
+        original_header = header.split(" / الدرجة من ")[0].strip()
+
+        if original_header in max_scores:
+            max_score = max_scores[original_header]
+            dv = DataValidation(
+                type="decimal",
+                operator="between",
+                formula1="0",
+                formula2=str(max_score),
+                allow_blank=True,
+            )
+            dv.errorTitle = "خطأ في الدرجة"
+            dv.error = f"الدرجة المدخلة أكبر من الدرجة المسموح بها. الحد الأعلى هو {max_score}."
+            dv.promptTitle = "تنبيه"
+            dv.prompt = f"اكتبي درجة من 0 إلى {max_score} فقط."
+            dv.showErrorMessage = True
+            dv.showInputMessage = True
+            ws.add_data_validation(dv)
+            dv.add(f"{col_letter}2:{col_letter}{ws.max_row}")
+
+
+# =========================
+# تنسيق Excel
+# =========================
+def format_excel_file(
+    excel_bytes,
+    lock_sheet=False,
+    merge_mode=False,
+    extra_hidden_columns=None,
+    max_scores=None,
+):
     if extra_hidden_columns is None:
         extra_hidden_columns = []
+    if max_scores is None:
+        max_scores = {}
 
     extra_hidden_columns = [clean_header(c) for c in extra_hidden_columns]
 
@@ -182,11 +374,14 @@ def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False, extra_hid
     ws = wb.active
 
     header_fill = PatternFill("solid", fgColor="BFEFFF")
+    points_fill = PatternFill("solid", fgColor="CCFFCC")
+    total_fill = PatternFill("solid", fgColor="FFF2CC")
+
     thin_border = Border(
         left=Side(style="thin", color="808080"),
         right=Side(style="thin", color="808080"),
         top=Side(style="thin", color="808080"),
-        bottom=Side(style="thin", color="808080")
+        bottom=Side(style="thin", color="808080"),
     )
 
     visible_widths = {}
@@ -198,7 +393,6 @@ def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False, extra_hid
             cell.alignment = Alignment(wrap_text=True, horizontal="center", vertical="center")
             cell.font = Font(size=12)
             cell.border = thin_border
-
             if lock_sheet:
                 cell.protection = Protection(locked=True)
 
@@ -206,26 +400,27 @@ def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False, extra_hid
         cell.fill = header_fill
         cell.font = Font(size=13, bold=True)
 
+    update_points_headers_with_max(ws, max_scores)
+
     for col in ws.columns:
         col_letter = col[0].column_letter
         header = clean_header(col[0].value)
-        header_lower = header.lower()
+        original_header = header.split(" / الدرجة من ")[0].strip()
+        header_lower = original_header.lower()
 
         ws.column_dimensions[col_letter].hidden = False
 
         if header_lower == "total points":
             total_col_letter = col_letter
+            for cell in col:
+                cell.fill = total_fill
 
-        if (
-            "points" in header_lower
-            and header_lower != "total points"
-            and header_lower not in [
-                "points - الاسم الرباعي",
-                "points - الرقم الأكاديمي",
-                "points - الشعبة",
-            ]
-        ):
+        if is_points_column(original_header):
             points_cols_for_total.append(col_letter)
+
+            # تلوين عمود الدرجات كاملًا باللون الأخضر الفاتح
+            for cell in col:
+                cell.fill = points_fill
 
             if lock_sheet:
                 for cell in col[1:]:
@@ -235,7 +430,7 @@ def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False, extra_hid
             if header_lower == "رقم":
                 ws.column_dimensions[col_letter].hidden = True
         else:
-            if header in extra_hidden_columns or should_auto_hide(header):
+            if original_header in extra_hidden_columns or should_auto_hide(original_header):
                 ws.column_dimensions[col_letter].hidden = True
                 continue
 
@@ -262,30 +457,27 @@ def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False, extra_hid
         for row_num in range(2, ws.max_row + 1):
             formula = "+".join([f"{col}{row_num}" for col in points_cols_for_total])
             ws[f"{total_col_letter}{row_num}"] = f"={formula}"
-
+            ws[f"{total_col_letter}{row_num}"].fill = total_fill
             if lock_sheet:
                 ws[f"{total_col_letter}{row_num}"].protection = Protection(locked=True)
 
+    add_score_validation(ws, max_scores)
+
     for row in ws.iter_rows():
         row_num = row[0].row
-
         if row_num == 1:
-            ws.row_dimensions[row_num].height = 55
+            ws.row_dimensions[row_num].height = 60
             continue
 
         needed_height = 35
-
         for cell in row:
             col_letter = cell.column_letter
-
             if ws.column_dimensions[col_letter].hidden:
                 continue
-
             if not cell.value:
                 continue
 
             text = str(cell.value).strip()
-
             if len(text) < 20:
                 continue
 
@@ -293,7 +485,6 @@ def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False, extra_hid
             chars_per_line = max(int(width * 1.35), 18)
             estimated_lines = text.count("\n") + (len(text) // chars_per_line) + 1
             cell_height = estimated_lines * 18
-
             needed_height = max(needed_height, cell_height)
 
         ws.row_dimensions[row_num].height = min(max(needed_height, 35), 409)
@@ -303,59 +494,191 @@ def format_excel_file(excel_bytes, lock_sheet=False, merge_mode=False, extra_hid
     if lock_sheet:
         ws.protection.sheet = True
         ws.protection.password = "J1825"
-    
-
 
     output = BytesIO()
     wb.save(output)
     output.seek(0)
     return output
-st.markdown("""
-<style>
-.signature {
-    position: fixed;
-    bottom: 20px;
-    left: 20px;
-    font-weight: bold;
-    font-size: 14px;
-    z-index: 9999;
-}
-</style>
 
-<div class="signature">
-رئيسة المركز: أ. خلود يعقوب بدو
-</div>
-""", unsafe_allow_html=True)
 
+# =========================
+# ترتيب ملفات التجميع
+# =========================
+def get_part_number(filename):
+    match = re.search(r"(?:مظروف|جزء|[-_\s])(\d+)(?:\.xlsx)?$", filename)
+    if match:
+        return int(match.group(1))
+
+    nums = re.findall(r"\d+", filename)
+    if nums:
+        return int(nums[-1])
+
+    return 999999
+
+
+def detect_base_name_from_parts(files):
+    if not files:
+        return "الاستجابات"
+
+    first_name = Path(files[0].name).stem
+    base = re.sub(r"[-_\s]*(\d+)$", "", first_name).strip()
+    base = re.sub(r"^(مظروف|جزء)[-_\s]*", "", base).strip()
+    return safe_filename(base or "الاستجابات")
+
+
+# =========================
+# تصميم الواجهة
+# =========================
+def apply_ui_style():
+    logo_base64 = get_logo_base64()
+    logo_html = ""
+    if logo_base64:
+        logo_html = f'<img src="data:image/png;base64,{logo_base64}" class="logo-img">'
+
+    st.markdown(f"""
+    <style>
+    .block-container {{
+        max-width: 1250px;
+        margin: auto;
+        padding-top: 2rem;
+    }}
+
+    .jidhafs-title {{
+        max-width: 1100px;
+        margin: 25px auto 30px auto;
+        padding: 30px 25px 40px 25px;
+        background-color:#eaf6ff;
+        border-radius:12px;
+        text-align:center;
+    }}
+
+    .logo-img {{
+        height: 90px;
+        width: auto;
+        margin-bottom: 15px;
+    }}
+
+    .jidhafs-title h1 {{
+        color:#15396b;
+        margin:0;
+        font-size:36px;
+        line-height:1.5;
+        font-weight:800;
+    }}
+
+    html, body, [class*="css"] {{
+        direction: rtl;
+        text-align: right;
+        font-size: 19px !important;
+    }}
+
+    button[data-baseweb="tab"] {{
+        direction: rtl;
+        text-align: right;
+        font-size: 19px !important;
+    }}
+
+    label, .stTextInput, .stNumberInput, .stFileUploader {{
+        font-size: 19px !important;
+        text-align: right;
+    }}
+
+    .stButton button {{
+        font-size: 19px !important;
+        padding: 10px 20px;
+    }}
+
+    [data-testid="stMarkdownContainer"] h3 {{
+        text-align: center !important;
+    }}
+
+    .signature {{
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        font-weight: bold;
+        font-size: 14px;
+        z-index: 9999;
+        background: rgba(255,255,255,0.8);
+        padding: 4px 8px;
+        border-radius: 8px;
+    }}
+    </style>
+
+    <div class="jidhafs-title">
+        {logo_html}
+        <h1>مركز التصحيح المركزي بمدرسة جدحفص الثانوية للبنات</h1>
+    </div>
+
+    <div class="signature">رئيسة المركز: أ. خلود يعقوب بدو</div>
+    """, unsafe_allow_html=True)
+
+
+# =========================
+# التطبيق
+# =========================
+if not login_screen():
+    st.stop()
+
+apply_ui_style()
+
+col_user, col_logout = st.columns([4, 1])
+with col_user:
+    st.info(f"مرحبًا، {st.session_state.username} — نوع الدخول: {st.session_state.role}")
+with col_logout:
+    if st.button("تسجيل خروج"):
+        st.session_state.logged_in = False
+        st.session_state.role = None
+        st.session_state.username = None
+        st.rerun()
+
+if st.session_state.role == "admin":
+    tab1, tab2, tab3 = st.tabs(["✂️ تقسيم الاستجابات", "📥 تجميع الاستجابات", "📊 تقرير الأدمن"])
+else:
+    tab1, tab2 = st.tabs(["✂️ تقسيم الاستجابات", "📥 تجميع الاستجابات"])
+    tab3 = None
+
+
+# =========================
+# تبويب التقسيم
+# =========================
 with tab1:
-    st.markdown("<h3 style='text-align:center;'>✂️ تقسيم ملف الاستجابات</h3>", unsafe_allow_html=True)
-    
+    st.markdown("<h3>✂️ تقسيم ملف الاستجابات</h3>", unsafe_allow_html=True)
+
     uploaded_file = st.file_uploader(
         "ارفع ملف Excel الأصلي للاستجابات",
         type=["xlsx"],
-        key="split_file"
-    )
-
-    chunk_size = st.number_input(
-        "عدد الاستجابات في كل ملف",
-        min_value=1,
-        value=10,
-        step=1
+        key="split_file",
     )
 
     if uploaded_file:
-        df = pd.read_excel(uploaded_file)
+        df = pd.read_excel(uploaded_file, engine="openpyxl")
+        original_file_name = uploaded_file.name
 
         st.success(f"تم رفع الملف بنجاح، عدد الاستجابات: {len(df)}")
 
-        all_columns = list(df.columns)
+        default_new_name = safe_filename(Path(original_file_name).stem)
+        new_base_name = st.text_input(
+            "اكتبي اسم الملف الجديد قبل التقسيم",
+            value=default_new_name,
+            help="مثال: تقن106 — ستكون الملفات: تقن106-1، تقن106-2 ...",
+        )
+        new_base_name = safe_filename(new_base_name)
 
+        chunk_size = st.number_input(
+            "عدد الاستجابات في كل ملف",
+            min_value=1,
+            value=10,
+            step=1,
+        )
+
+        all_columns = list(df.columns)
         auto_hidden_columns = [col for col in all_columns if should_auto_hide(col)]
 
         extra_hidden_columns = st.multiselect(
-            "اختار أي أعمدة إضافية تريد إخفاءها قبل تنزيل الملفات",
+            "اختاري أي أعمدة إضافية تريدين إخفاءها قبل تنزيل الملفات",
             options=all_columns,
-            default=[]
+            default=[],
         )
 
         hidden_preview_columns = set(auto_hidden_columns + extra_hidden_columns)
@@ -368,14 +691,90 @@ with tab1:
             if col not in hidden_preview_columns
         ]
 
-        st.markdown("<h4 style='text-align:center;'>👁️ معاينة أول مظروف بعد الإخفاء</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='text-align:center;'>👁️ معاينة أول ملف بعد الإخفاء</h4>", unsafe_allow_html=True)
         st.dataframe(preview_chunk[visible_preview_columns], use_container_width=True)
 
         if auto_hidden_columns:
-            st.info("الأعمدة التي سيخفيها التطبيق تلقائيًا: " + "، ".join(auto_hidden_columns))
+            st.info("الأعمدة التي سيخفيها التطبيق تلقائيًا: " + "، ".join([str(c) for c in auto_hidden_columns]))
 
-        if st.button("تقسيم الاستجابات وتنزيل الملفات"):
+        st.markdown("---")
+        st.markdown("### 🟩 تحديد درجات الأسئلة المقالية")
+
+        detected_scores, unknown_points = detect_max_scores_from_data(df)
+        templates = load_grade_templates()
+        signature = get_file_signature(df)
+        saved_template = templates.get(signature, {})
+
+        max_scores = {}
+        max_scores.update(detected_scores)
+        max_scores.update(saved_template.get("max_scores", {}))
+
+        if detected_scores:
+            st.success(f"تم تحديد الدرجة الكبرى تلقائيًا لعدد {len(detected_scores)} من أعمدة الدرجات.")
+
+        unresolved_rows = []
+        for item in unknown_points:
+            header = item["عمود الدرجة"]
+            if header not in max_scores:
+                unresolved_rows.append(item)
+
+        if unresolved_rows:
+            st.warning("هذه الأعمدة لم يستطع البرنامج تحديد درجتها تلقائيًا. اكتبي الدرجة الكبرى لكل سؤال.")
+
+            manual_scores = {}
+            for idx, item in enumerate(unresolved_rows, start=1):
+                st.markdown(f"**{idx}. عمود الدرجة:** `{item['عمود الدرجة']}`")
+                st.caption(f"السؤال المرتبط: {item['السؤال']}")
+                score = st.number_input(
+                    f"الدرجة الكبرى لهذا السؤال رقم {idx}",
+                    min_value=0.0,
+                    value=0.0,
+                    step=0.5,
+                    key=f"score_{signature}_{idx}",
+                )
+                if score > 0:
+                    manual_scores[item["عمود الدرجة"]] = int(score) if float(score).is_integer() else score
+
+            if st.button("💾 حفظ قالب الدرجات لهذا الملف"):
+                if len(manual_scores) == len(unresolved_rows):
+                    max_scores.update(manual_scores)
+                    templates[signature] = {
+                        "file_name": original_file_name,
+                        "new_base_name": new_base_name,
+                        "max_scores": max_scores,
+                    }
+                    save_grade_templates(templates)
+                    st.success("تم حفظ قالب الدرجات بنجاح ✅")
+                    st.rerun()
+                else:
+                    st.error("اكتبي الدرجة الكبرى لكل الأعمدة الظاهرة قبل الحفظ.")
+        else:
+            st.success("كل أعمدة الدرجات لها درجة كبرى محددة ✅")
+            templates[signature] = {
+                "file_name": original_file_name,
+                "new_base_name": new_base_name,
+                "max_scores": max_scores,
+            }
+            save_grade_templates(templates)
+
+        with st.expander("عرض الدرجات الكبرى المعتمدة"):
+            if max_scores:
+                st.dataframe(
+                    pd.DataFrame([
+                        {"عمود الدرجة": k, "الدرجة الكبرى": v}
+                        for k, v in max_scores.items()
+                    ]),
+                    use_container_width=True,
+                )
+            else:
+                st.info("لا توجد درجات محددة حتى الآن.")
+
+        can_split = len(unresolved_rows) == 0
+
+        if st.button("✂️ تقسيم الاستجابات وتنزيل الملفات", disabled=not can_split):
             zip_buffer = BytesIO()
+            part_names = []
+            responses_per_part_list = []
 
             with ZipFile(zip_buffer, "w") as zip_file:
                 for i in range(0, len(df), chunk_size):
@@ -390,64 +789,136 @@ with tab1:
                         excel_buffer,
                         lock_sheet=True,
                         merge_mode=False,
-                        extra_hidden_columns=extra_hidden_columns
+                        extra_hidden_columns=extra_hidden_columns,
+                        max_scores=max_scores,
                     )
 
                     file_number = (i // chunk_size) + 1
-                    zip_file.writestr(
-                        f"مظروف_{file_number}.xlsx",
-                        formatted_file.getvalue()
-                    )
+                    part_file_name = f"{new_base_name}-{file_number}.xlsx"
+                    part_names.append(part_file_name)
+                    responses_per_part_list.append(str(len(chunk)))
+
+                    zip_file.writestr(part_file_name, formatted_file.getvalue())
 
             zip_buffer.seek(0)
+            part_count = len(part_names)
 
+            log_operation(
+                operation_type="تقسيم",
+                original_file=original_file_name,
+                new_file_name=new_base_name,
+                part_names=part_names,
+                part_count=part_count,
+                response_count=len(df),
+                responses_per_part="، ".join(responses_per_part_list),
+                split_done="نعم",
+                merge_done="لا",
+                status="تم",
+            )
+
+            st.success(f"تم تقسيم الملف إلى {part_count} ملف ✅")
             st.download_button(
                 label="⬇️ تنزيل الملفات المقسمة ZIP",
                 data=zip_buffer,
-                file_name="split_files.zip",
-                mime="application/zip"
+                file_name=f"{new_base_name}-split_files.zip",
+                mime="application/zip",
             )
-            
 
+
+# =========================
+# تبويب التجميع
+# =========================
 with tab2:
-    st.markdown("<h3 style='text-align:center;'>📥 تجميع ملفات الاستجابات المقسمة</h3>", unsafe_allow_html=True)
+    st.markdown("<h3>📥 تجميع ملفات الاستجابات المقسمة</h3>", unsafe_allow_html=True)
 
     uploaded_files = st.file_uploader(
-        "ارفع ملفات Excel المقسمة",
+        "ارفعي ملفات Excel المقسمة",
         type=["xlsx"],
         accept_multiple_files=True,
-        key="merge_files"
+        key="merge_files",
     )
 
     if uploaded_files:
         sorted_files = sorted(uploaded_files, key=lambda f: get_part_number(f.name))
+        detected_base_name = detect_base_name_from_parts(sorted_files)
+
+        merge_base_name = st.text_input(
+            "اسم ملف التجميع النهائي",
+            value=detected_base_name,
+            help="مثال: تقن106 — الناتج سيكون تقن106-مجمعة.xlsx",
+        )
+        merge_base_name = safe_filename(merge_base_name)
 
         all_data = []
-
         for file in sorted_files:
             df_part = pd.read_excel(file, engine="openpyxl")
             all_data.append(df_part)
 
         combined = pd.concat(all_data, ignore_index=True)
 
-        st.success(f"تم رفع وتجميع {len(uploaded_files)} ملف")
+        st.success(f"تم رفع {len(uploaded_files)} ملف، وعدد الاستجابات بعد التجميع: {len(combined)}")
         st.dataframe(combined.head(), use_container_width=True)
 
-        if st.button("تجميع وتنزيل الملف"):
+        if st.button("📥 تجميع وتنزيل الملف"):
             output_excel = BytesIO()
-
             with pd.ExcelWriter(output_excel, engine="openpyxl") as writer:
                 combined.to_excel(writer, index=False, sheet_name="Merged")
 
             formatted_merged = format_excel_file(
                 output_excel,
                 lock_sheet=False,
-                merge_mode=True
+                merge_mode=True,
+                extra_hidden_columns=[],
+                max_scores={},
             )
 
+            merged_file_name = f"{merge_base_name}-مجمعة.xlsx"
+
+            log_operation(
+                operation_type="تجميع",
+                original_file="، ".join([f.name for f in sorted_files]),
+                new_file_name=merge_base_name,
+                part_names=[f.name for f in sorted_files],
+                part_count=len(sorted_files),
+                response_count=len(combined),
+                responses_per_part="",
+                split_done="لا",
+                merge_done="نعم",
+                merged_file_name=merged_file_name,
+                status="تم",
+            )
+
+            st.success("تم تجميع الملف بنجاح ✅")
             st.download_button(
                 label="⬇️ تنزيل ملف التجميع النهائي",
                 data=formatted_merged,
-                file_name="الاستجابات_مجمعة.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                file_name=merged_file_name,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
+
+
+# =========================
+# تبويب تقرير الأدمن
+# =========================
+if tab3 is not None:
+    with tab3:
+        st.markdown("<h3>📊 تقرير الأدمن</h3>", unsafe_allow_html=True)
+
+        if LOCAL_REPORT_FILE.exists():
+            report_df = pd.read_excel(LOCAL_REPORT_FILE)
+            st.dataframe(report_df, use_container_width=True)
+
+            report_buffer = BytesIO()
+            report_df.to_excel(report_buffer, index=False)
+            report_buffer.seek(0)
+
+            st.download_button(
+                label="⬇️ تنزيل التقرير المحلي Excel",
+                data=report_buffer,
+                file_name="reports.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        else:
+            st.info("لا يوجد تقرير محلي حتى الآن.")
+
+        st.warning("ملاحظة: التقرير المحلي يعرض عمليات هذا الجهاز فقط. التقرير المركزي لكل الأجهزة يكون في Google Sheet بعد إضافة رابط Apps Script.")
