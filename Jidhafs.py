@@ -13,7 +13,24 @@ import requests
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill, Border, Side, Protection
 from openpyxl.worksheet.datavalidation import DataValidation
+from pathlib import Path
+from datetime import datetime
+from pathlib import Path
 
+def get_version():
+    try:
+        return Path("version.txt").read_text().strip()
+    except:
+        return "?"
+
+version = get_version()
+today = datetime.now().strftime("%Y-%m-%d")
+
+def get_version():
+    try:
+        return Path("version.txt").read_text().strip()
+    except:
+        return "?"
 
 # =========================
 # إعدادات عامة
@@ -1110,11 +1127,15 @@ st.markdown("""
 }
 </style>
 
+st.markdown(f"""
 <div class="footer-container">
     <div class="footer-right">تصميم وبرمجة: أ. عفاف حسين</div>
-    <div class="footer-center">إشراف: أ. أمينة الصائغ</div>
-    <div class="footer-left">رئيسة المركز: أ. خلود يعقوب بدو</div>
+    <div class="footer-center">إشراف: أ. أمينة الصالح</div>
+    <div class="footer-left">رئيسة المركز: أ. خلود يعقوب بدر</div>
+
+    <div style="margin-top:10px; font-size:12px; color:gray;">
+        🔄 تم التحديث لآخر إصدار {version} بتاريخ {today}
+    </div>
 </div>
 """, unsafe_allow_html=True)
-
 
