@@ -775,15 +775,31 @@ with tab1:
             if not can_split:
                 st.warning("باقي أعمدة بدون درجة كبرى: " + "، ".join(missing_scores))
 
+        if max_scores:
+            total_exam_score = sum(float(v) for v in max_scores.values())
+            if total_exam_score.is_integer():
+                total_exam_score = int(total_exam_score)
+            st.success(f"📌 الدرجة النهائية للاختبار: {total_exam_score}")
+
         with st.expander("عرض الدرجات الكبرى المعتمدة"):
             if max_scores:
-                st.dataframe(
-                    pd.DataFrame([
-                        {"عمود الدرجة": k, "الدرجة الكبرى": v}
-                        for k, v in max_scores.items()
-                    ]),
-                    use_container_width=True,
-                )
+                total_exam_score = sum(float(v) for v in max_scores.values())
+                if total_exam_score.is_integer():
+                    total_exam_score = int(total_exam_score)
+
+                scores_df = pd.DataFrame([
+                    {"عمود الدرجة": k, "الدرجة الكبرى": v}
+                    for k, v in max_scores.items()
+                ])
+
+                total_row = pd.DataFrame([
+                    {"عمود الدرجة": "المجموع الكلي / الدرجة النهائية للاختبار", "الدرجة الكبرى": total_exam_score}
+                ])
+
+                scores_df = pd.concat([scores_df, total_row], ignore_index=True)
+
+                st.dataframe(scores_df, use_container_width=True)
+                st.success(f"📌 الدرجة النهائية للاختبار: {total_exam_score}")
             else:
                 st.info("لا توجد درجات محددة حتى الآن.")
 
