@@ -273,9 +273,8 @@ def is_points_column(header):
 
 def find_related_question(points_header, all_headers):
     points_header_clean = clean_header(points_header)
-    lower = points_header_clean.lower()
 
-    possible_question = re.sub(r"^points\s*-\s*", "", points_header_clean, flags=re.IGNORECASE).strip()
+    possible_question = re.sub(r"^points[ ]*-[ ]*", "", points_header_clean, flags=re.IGNORECASE).strip()
     if possible_question and possible_question != points_header_clean:
         for h in all_headers:
             if clean_header(h) == possible_question:
@@ -283,6 +282,25 @@ def find_related_question(points_header, all_headers):
         return possible_question
 
     return points_header_clean
+
+
+def extract_score_from_text(text):
+    """يستخرج مجموع الدرجات الظاهرة من نص السؤال (مثل: 5 درجات، ٥ درجات)
+    ويجمعها إذا كان في أكثر من بند."""
+    text = str(text or "")
+
+    # تحويل الأرقام العربية إلى إنجليزية
+    arabic_digits = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+    text = text.translate(arabic_digits)
+
+    # استخراج كل الأرقام المرتبطة بكلمة درجة/درجات
+    matches = re.findall(r"([0-9]+(?:[.][0-9]+)?)[ ]*درجات?", text)
+
+    if matches:
+        total = sum(float(x) for x in matches)
+        return int(total) if total.is_integer() else total
+
+    return None
 
 
 def detect_max_scores_from_data(df):
@@ -708,24 +726,41 @@ with tab1:
         st.markdown("---")
         st.markdown("### 🟩 تحديد درجات الأسئلة")
 
-        # لا نعتمد الدرجة تلقائيًا من الاستجابات؛ لأن أعلى درجة موجودة قد تكون درجة طالبة وليست الدرجة الكبرى للسؤال.
-        # المستخدم يكتب الدرجة الكبرى من الإجابة النموذجية، والبرنامج يجمع ما تم إدخاله فقط.
+        # لا نعتمد على أعلى درجة في الاستجابات كدرجة كبرى؛ لأنها قد تكون درجة طالبة فقط.
+        # نعتمد أولًا على القالب المحفوظ، ثم نحاول قراءة الدرجة الظاهرة في نص السؤال، والناقص يدخله المستخدم.
         detected_scores, unknown_points = detect_max_scores_from_data(df)
         templates = load_grade_templates()
         signature = get_file_signature(df)
         saved_template = templates.get(signature, {})
 
         all_points_items = []
+        score_sources = {}
+
         for col in df.columns:
             header = clean_header(col)
             if is_points_column(header):
+                question_text = find_related_question(header, list(df.columns))
                 saved_value = saved_template.get("max_scores", {}).get(header)
+                visible_score = extract_score_from_text(question_text)
                 detected_value = detected_scores.get(header)
-                default_value = saved_value if saved_value is not None else 0
+
+                if saved_value is not None and float(saved_value) > 0:
+                    default_value = saved_value
+                    source = "قالب محفوظ"
+                elif visible_score is not None:
+                    default_value = visible_score
+                    source = "درجة ظاهرة في السؤال"
+                else:
+                    default_value = 0
+                    source = "مدخل من المستخدم"
+
+                score_sources[header] = source
+
                 all_points_items.append({
                     "عمود الدرجة": header,
-                    "السؤال": find_related_question(header, list(df.columns)),
+                    "السؤال": question_text,
                     "الدرجة الكبرى": default_value,
+                    "المصدر": source,
                     "أعلى درجة موجودة في الملف": detected_value if detected_value is not None else "غير محدد",
                 })
 
@@ -734,7 +769,7 @@ with tab1:
             max_scores = {}
             can_split = False
         else:
-            st.info("اكتبي الدرجة الكبرى لكل سؤال من الإجابة النموذجية. البرنامج سيجمع الدرجات التي تدخلينها فقط حتى تتأكدين من الدرجة النهائية للاختبار.")
+            st.info("البرنامج يضع الدرجة الظاهرة في نص السؤال تلقائيًا، والدرجات غير الظاهرة تدخلينها يدويًا. بعد ذلك يجمع الدرجات كلها للمراجعة.")
             max_scores = {}
 
             for idx, item in enumerate(all_points_items, start=1):
@@ -744,6 +779,7 @@ with tab1:
                 with st.container(border=True):
                     st.markdown(f"**{idx}. عمود الدرجة:** `{item['عمود الدرجة']}`")
                     st.caption(f"السؤال المرتبط: {item['السؤال']}")
+                    st.caption(f"مصدر الدرجة الحالية: {item['المصدر']}")
                     st.caption(f"أعلى درجة موجودة في ملف الاستجابات فقط للمراجعة: {item['أعلى درجة موجودة في الملف']}")
                     score = st.number_input(
                         "الدرجة الكبرى",
@@ -754,7 +790,15 @@ with tab1:
                     )
 
                     if score > 0:
-                        max_scores[item["عمود الدرجة"]] = int(score) if float(score).is_integer() else score
+                        final_score = int(score) if float(score).is_integer() else score
+                        max_scores[item["عمود الدرجة"]] = final_score
+
+                        if item["المصدر"] == "مدخل من المستخدم":
+                            score_sources[item["عمود الدرجة"]] = "مدخل من المستخدم"
+                        elif final_score != item["الدرجة الكبرى"]:
+                            score_sources[item["عمود الدرجة"]] = "تم تعديله من المستخدم"
+                        else:
+                            score_sources[item["عمود الدرجة"]] = item["المصدر"]
 
             missing_scores = [
                 item["عمود الدرجة"]
@@ -792,12 +836,20 @@ with tab1:
                     total_exam_score = int(total_exam_score)
 
                 scores_df = pd.DataFrame([
-                    {"عمود الدرجة": k, "الدرجة الكبرى التي أدخلها المستخدم": v}
+                    {
+                        "عمود الدرجة": k,
+                        "الدرجة المعتمدة": v,
+                        "المصدر": score_sources.get(k, "مدخل من المستخدم"),
+                    }
                     for k, v in max_scores.items()
                 ])
 
                 total_row = pd.DataFrame([
-                    {"عمود الدرجة": "المجموع الكلي / الدرجة النهائية للاختبار", "الدرجة الكبرى التي أدخلها المستخدم": total_exam_score}
+                    {
+                        "عمود الدرجة": "المجموع الكلي / الدرجة النهائية للاختبار",
+                        "الدرجة المعتمدة": total_exam_score,
+                        "المصدر": "مجموع الدرجات الظاهرة والمدخلة",
+                    }
                 ])
 
                 scores_df = pd.concat([scores_df, total_row], ignore_index=True)
