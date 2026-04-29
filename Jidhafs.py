@@ -1089,9 +1089,9 @@ if tab3 is not None:
 # =========================
 # فوتر أسفل الصفحة
 # =========================
-st.markdown("""
+st.markdown(f"""
 <style>
-.footer-container {
+.footer-container {{
     margin-top: 80px;
     padding: 18px 10px;
     border-top: 1px solid #d9d9d9;
@@ -1102,40 +1102,38 @@ st.markdown("""
     font-size: 14px;
     color: #333;
     direction: rtl;
-}
-.footer-right {
+}}
+.footer-right {{
     text-align: right;
     flex: 1;
-}
-.footer-center {
+}}
+.footer-center {{
     text-align: center;
     flex: 1;
-}
-.footer-left {
+}}
+.footer-left {{
     text-align: left;
     flex: 1;
-}
-@media (max-width: 700px) {
-    .footer-container {
+}}
+@media (max-width: 700px) {{
+    .footer-container {{
         display: block;
         text-align: center;
-    }
-    .footer-right, .footer-center, .footer-left {
+    }}
+    .footer-right, .footer-center, .footer-left {{
         text-align: center;
         margin: 6px 0;
-    }
-}
+    }}
+}}
 </style>
 
-st.markdown(f"""
 <div class="footer-container">
     <div class="footer-right">تصميم وبرمجة: أ. عفاف حسين</div>
     <div class="footer-center">إشراف: أ. أمينة الصالح</div>
     <div class="footer-left">رئيسة المركز: أ. خلود يعقوب بدر</div>
+</div>
 
-    <div style="margin-top:10px; font-size:12px; color:gray;">
-        تم التحديث لآخر إصدار {version} بتاريخ {today}
-    </div>
+<div style="text-align:center; margin-top:10px; font-size:12px; color:gray;">
+    تم التحديث لآخر إصدار {version} بتاريخ {today}
 </div>
 """, unsafe_allow_html=True)
-
