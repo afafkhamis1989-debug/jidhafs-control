@@ -273,6 +273,7 @@ def is_points_column(header):
 
 def find_related_question(points_header, all_headers):
     points_header_clean = clean_header(points_header)
+    lower = points_header_clean.lower()
 
     possible_question = re.sub(r"^points\s*-\s*", "", points_header_clean, flags=re.IGNORECASE).strip()
     if possible_question and possible_question != points_header_clean:
@@ -282,28 +283,6 @@ def find_related_question(points_header, all_headers):
         return possible_question
 
     return points_header_clean
-
-
-def extract_score_from_text(text):
-    """يحاول استخراج الدرجة الظاهرة من نص السؤال مثل: 5 درجات، ٥ درجات، من 5، من ٥"""
-    text = str(text or "")
-    arabic_digits = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
-    text = text.translate(arabic_digits)
-
-    patterns = [
-        r"(\d+(?:\.\d+)?)\s*درجات",
-        r"(\d+(?:\.\d+)?)\s*درجة",
-        r"من\s*(\d+(?:\.\d+)?)",
-        r"/\s*(\d+(?:\.\d+)?)",
-    ]
-
-    for pattern in patterns:
-        match = re.search(pattern, text)
-        if match:
-            value = float(match.group(1))
-            return int(value) if value.is_integer() else value
-
-    return None
 
 
 def detect_max_scores_from_data(df):
@@ -729,38 +708,26 @@ with tab1:
         st.markdown("---")
         st.markdown("### 🟩 تحديد درجات الأسئلة")
 
-        # لا نعتمد على أعلى درجة في الاستجابات كدرجة كبرى؛ لأنها قد تكون درجة طالبة فقط.
-        # نعتمد أولًا على القالب المحفوظ، ثم نحاول قراءة الدرجة الظاهرة في نص السؤال، والناقص يدخله المستخدم.
+        # لا نعتمد الدرجة تلقائيًا من الاستجابات؛ لأن أعلى درجة موجودة قد تكون درجة طالبة وليست الدرجة الكبرى للسؤال.
+        # المستخدم يكتب الدرجة الكبرى من الإجابة النموذجية، والبرنامج يجمع ما تم إدخاله فقط.
         detected_scores, unknown_points = detect_max_scores_from_data(df)
         templates = load_grade_templates()
         signature = get_file_signature(df)
         saved_template = templates.get(signature, {})
 
         all_points_items = []
-        score_sources = {}
-
         for col in df.columns:
             header = clean_header(col)
             if is_points_column(header):
-                question_text = find_related_question(header, list(df.columns))
                 saved_value = saved_template.get("max_scores", {}).get(header)
-                visible_score = extract_score_from_text(question_text)
                 detected_value = detected_scores.get(header)
-
-                if saved_value is not None:
-                    default_value = saved_value
-                    source = "قالب محفوظ"
-                elif visible_score is not None:
-                    default_value = visible_score
-                    source = "درجة ظاهرة في السؤال"
-                else:
-                    default_value = 0
-                    source = "مدخل من المستخدم"
-
-                score_sources[header] = source
-
+                default_value = saved_value if saved_value is not None else 0
                 all_points_items.append({
-                    "عمود الدرجة"
+                    "عمود الدرجة": header,
+                    "السؤال": find_related_question(header, list(df.columns)),
+                    "الدرجة الكبرى": default_value,
+                    "أعلى درجة موجودة في الملف": detected_value if detected_value is not None else "غير محدد",
+                })
 
         if not all_points_items:
             st.error("ما لقيت أعمدة Points في الملف. تأكدي أن ملف الاستجابات يحتوي أعمدة درجات.")
