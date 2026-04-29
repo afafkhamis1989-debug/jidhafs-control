@@ -1137,5 +1137,5 @@ st.markdown(f"""
         تم التحديث لآخر إصدار {version} بتاريخ {today}
     </div>
 </div>
-""", unsafe_allow_html=True)"""
+""", unsafe_allow_html=True)
 
