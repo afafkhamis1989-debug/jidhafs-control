@@ -655,9 +655,6 @@ def apply_ui_style():
         <h1>مركز التصحيح المركزي بمدرسة جدحفص الثانوية للبنات</h1>
     </div>
 
-    <div class="fixed-footer footer-right">تصميم وبرمجة: أ. عفاف حسين</div>
-    <div class="fixed-footer footer-center">إشراف: أ. أمينة الصائغ</div>
-    <div class="fixed-footer footer-left">رئيسة المركز: أ. خلود يعقوب بدو</div>
     """, unsafe_allow_html=True)
 
 
@@ -860,10 +857,10 @@ with tab1:
                     save_grade_templates(templates)
                     st.success("تم حفظ قالب الدرجات بنجاح ✅")
                 else:
-                    st.error("يجب كتابة الدرجة الكبرى لكل أعمدة Points قبل الحفظ.")
+                    st.error("لازم تكتبين الدرجة الكبرى لكل أعمدة Points قبل الحفظ.")
 
             if not can_split:
-                st.warning("باقي من الupdateأعمدة بدون درجة كبرى: " + "، ".join(missing_scores))
+                st.warning("باقي أعمدة بدون درجة كبرى: " + "، ".join(missing_scores))
 
         if max_scores:
             total_exam_score = sum(float(v) for v in max_scores.values())
@@ -1064,4 +1061,53 @@ if tab3 is not None:
             st.info("لا يوجد تقرير محلي حتى الآن.")
 
         st.warning("ملاحظة: التقرير المحلي يعرض عمليات هذا الجهاز فقط. التقرير المركزي لكل الأجهزة يكون في Google Sheet بعد إضافة رابط Apps Script.")
+
+
+# =========================
+# فوتر أسفل الصفحة
+# =========================
+st.markdown("""
+<style>
+.footer-container {
+    margin-top: 80px;
+    padding: 18px 10px;
+    border-top: 1px solid #d9d9d9;
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    font-weight: bold;
+    font-size: 14px;
+    color: #333;
+    direction: rtl;
+}
+.footer-right {
+    text-align: right;
+    flex: 1;
+}
+.footer-center {
+    text-align: center;
+    flex: 1;
+}
+.footer-left {
+    text-align: left;
+    flex: 1;
+}
+@media (max-width: 700px) {
+    .footer-container {
+        display: block;
+        text-align: center;
+    }
+    .footer-right, .footer-center, .footer-left {
+        text-align: center;
+        margin: 6px 0;
+    }
+}
+</style>
+
+<div class="footer-container">
+    <div class="footer-right">تصميم وبرمجة: أ. عفاف حسين</div>
+    <div class="footer-center">إشراف: أ. أمينة الصائغ</div>
+    <div class="footer-left">رئيسة المركز: أ. خلود يعقوب بدو</div>
+</div>
+""", unsafe_allow_html=True)
 
