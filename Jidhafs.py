@@ -1134,7 +1134,7 @@ st.markdown(f"""
     <div class="footer-left">رئيسة المركز: أ. خلود يعقوب بدر</div>
 
     <div style="margin-top:10px; font-size:12px; color:gray;">
-        🔄 تم التحديث لآخر إصدار {version} بتاريخ {today}
+        تم التحديث لآخر إصدار {version} بتاريخ {today}
     </div>
 </div>
 """, unsafe_allow_html=True)
