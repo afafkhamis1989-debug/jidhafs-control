@@ -1135,7 +1135,7 @@ st.markdown(f"""
 
 <div class="footer-container">
     <div class="footer-right">تصميم وبرمجة: أ. عفاف حسين</div>
-    <div class="footer-center">إشراف: أ. أمينة الصالح</div>
+    <div class="footer-center">إشراف: أ. أمينة الصائغ</div>
     <div class="footer-left">رئيسة المركز: أ. خلود يعقوب بدر</div>
 </div>
 
