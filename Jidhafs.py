@@ -33,7 +33,7 @@ GOOGLE_SCRIPT_URL = "PUT_YOUR_GOOGLE_SCRIPT_URL_HERE"
 ADMIN_PASSWORD = "Jidhafs!1825"
 
 # كلمة مرور موحدة للمستخدمين العاديين
-USER_PASSWORD = "User!1234"
+USER_PASSWORD = "1234"
 
 
 # =========================
