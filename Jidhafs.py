@@ -133,7 +133,7 @@ def login_screen():
     role = st.radio("نوع الدخول", ["مستخدم", "أدمن"], horizontal=True)
 
     if role == "مستخدم":
-        username = st.text_input("اسم المستخدم / اسم المعلمة")
+        username = st.text_input("اسم المستخدم / اسم المعلم")
         password = st.text_input("كلمة المرور", type="password")
 
         if st.button("دخول"):
