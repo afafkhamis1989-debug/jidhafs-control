@@ -415,10 +415,18 @@ def format_excel_file(
             for cell in col:
                 cell.fill = total_fill
 
-        if is_points_column(original_header):
+        # تلوين وفتح أعمدة الدرجات كاملة
+        # نعتمد هنا على الاسم الظاهر بعد إضافة / الدرجة من ... حتى لا يفوت أي عمود Points
+        if (
+            "points" in header.lower()
+            and "total points" not in header.lower()
+            and "points - الاسم الرباعي" not in header.lower()
+            and "points - الرقم الأكاديمي" not in header.lower()
+            and "points - الشعبة" not in header.lower()
+        ):
             points_cols_for_total.append(col_letter)
 
-            # تلوين عمود الدرجات كاملًا باللون الأخضر الفاتح
+            # ✅ تلوين عمود الدرجات كاملًا باللون الأخضر الفاتح، من العنوان إلى آخر استجابة
             for cell in col:
                 cell.fill = points_fill
 
@@ -698,46 +706,62 @@ with tab1:
             st.info("الأعمدة التي سيخفيها التطبيق تلقائيًا: " + "، ".join([str(c) for c in auto_hidden_columns]))
 
         st.markdown("---")
-        st.markdown("### 🟩 تحديد درجات الأسئلة المقالية")
+        st.markdown("### 🟩 تحديد درجات الأسئلة")
 
         detected_scores, unknown_points = detect_max_scores_from_data(df)
         templates = load_grade_templates()
         signature = get_file_signature(df)
         saved_template = templates.get(signature, {})
 
-        max_scores = {}
-        max_scores.update(detected_scores)
-        max_scores.update(saved_template.get("max_scores", {}))
+        all_points_items = []
+        for col in df.columns:
+            header = clean_header(col)
+            if is_points_column(header):
+                saved_value = saved_template.get("max_scores", {}).get(header)
+                detected_value = detected_scores.get(header)
+                default_value = saved_value if saved_value is not None else detected_value
+                all_points_items.append({
+                    "عمود الدرجة": header,
+                    "السؤال": find_related_question(header, list(df.columns)),
+                    "الدرجة الكبرى": default_value,
+                })
 
-        if detected_scores:
-            st.success(f"تم تحديد الدرجة الكبرى تلقائيًا لعدد {len(detected_scores)} من أعمدة الدرجات.")
+        if not all_points_items:
+            st.error("ما لقيت أعمدة Points في الملف. تأكدي أن ملف الاستجابات يحتوي أعمدة درجات.")
+            max_scores = {}
+            can_split = False
+        else:
+            st.info("راجعي الدرجة الكبرى لكل سؤال. إذا كانت الدرجة غير صحيحة تقدرين تعديلها قبل التقسيم.")
+            max_scores = {}
 
-        unresolved_rows = []
-        for item in unknown_points:
-            header = item["عمود الدرجة"]
-            if header not in max_scores:
-                unresolved_rows.append(item)
+            for idx, item in enumerate(all_points_items, start=1):
+                current_value = item["الدرجة الكبرى"]
+                default_score = float(current_value) if current_value is not None else 0.0
 
-        if unresolved_rows:
-            st.warning("هذه الأعمدة لم يستطع البرنامج تحديد درجتها تلقائيًا. اكتبي الدرجة الكبرى لكل سؤال.")
+                with st.container(border=True):
+                    st.markdown(f"**{idx}. عمود الدرجة:** `{item['عمود الدرجة']}`")
+                    st.caption(f"السؤال المرتبط: {item['السؤال']}")
+                    score = st.number_input(
+                        "الدرجة الكبرى",
+                        min_value=0.0,
+                        value=default_score,
+                        step=0.5,
+                        key=f"score_{signature}_{idx}_{item['عمود الدرجة']}",
+                    )
 
-            manual_scores = {}
-            for idx, item in enumerate(unresolved_rows, start=1):
-                st.markdown(f"**{idx}. عمود الدرجة:** `{item['عمود الدرجة']}`")
-                st.caption(f"السؤال المرتبط: {item['السؤال']}")
-                score = st.number_input(
-                    f"الدرجة الكبرى لهذا السؤال رقم {idx}",
-                    min_value=0.0,
-                    value=0.0,
-                    step=0.5,
-                    key=f"score_{signature}_{idx}",
-                )
-                if score > 0:
-                    manual_scores[item["عمود الدرجة"]] = int(score) if float(score).is_integer() else score
+                    if score > 0:
+                        max_scores[item["عمود الدرجة"]] = int(score) if float(score).is_integer() else score
+
+            missing_scores = [
+                item["عمود الدرجة"]
+                for item in all_points_items
+                if item["عمود الدرجة"] not in max_scores
+            ]
+
+            can_split = len(missing_scores) == 0
 
             if st.button("💾 حفظ قالب الدرجات لهذا الملف"):
-                if len(manual_scores) == len(unresolved_rows):
-                    max_scores.update(manual_scores)
+                if can_split:
                     templates[signature] = {
                         "file_name": original_file_name,
                         "new_base_name": new_base_name,
@@ -745,17 +769,11 @@ with tab1:
                     }
                     save_grade_templates(templates)
                     st.success("تم حفظ قالب الدرجات بنجاح ✅")
-                    st.rerun()
                 else:
-                    st.error("اكتبي الدرجة الكبرى لكل الأعمدة الظاهرة قبل الحفظ.")
-        else:
-            st.success("كل أعمدة الدرجات لها درجة كبرى محددة ✅")
-            templates[signature] = {
-                "file_name": original_file_name,
-                "new_base_name": new_base_name,
-                "max_scores": max_scores,
-            }
-            save_grade_templates(templates)
+                    st.error("لازم تكتبين الدرجة الكبرى لكل أعمدة Points قبل الحفظ.")
+
+            if not can_split:
+                st.warning("باقي أعمدة بدون درجة كبرى: " + "، ".join(missing_scores))
 
         with st.expander("عرض الدرجات الكبرى المعتمدة"):
             if max_scores:
@@ -768,8 +786,6 @@ with tab1:
                 )
             else:
                 st.info("لا توجد درجات محددة حتى الآن.")
-
-        can_split = len(unresolved_rows) == 0
 
         if st.button("✂️ تقسيم الاستجابات وتنزيل الملفات", disabled=not can_split):
             zip_buffer = BytesIO()
