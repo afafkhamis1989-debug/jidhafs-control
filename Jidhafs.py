@@ -438,8 +438,8 @@ def format_excel_file(
                 cell.fill = total_fill
 
         # أعمدة الدرجات:
-        # 1) إذا العمود له درجة كبرى معتمدة: يظهر، يتلوّن أخضر، ينفتح للمصححة، ويدخل في Total points
-        # 2) إذا العمود مؤكد يدويًا بأنه صفر/لا يُحسب: يختفي ويبقى مقفل، ولا يدخل في Total points
+        # في التقسيم: الأعمدة المعتمدة فقط تظهر وتدخل في Total points، والمستبعدة/المؤكدة صفر تُخفى وتُقفل.
+        # في التجميع: نرجع الملف لشكله الأصلي ونحسب Total points من كل أعمدة Points الموجودة في الملفات المصححة.
         if (
             "points" in header.lower()
             and "total points" not in header.lower()
@@ -447,7 +447,13 @@ def format_excel_file(
             and "points - الرقم الأكاديمي" not in header.lower()
             and "points - الشعبة" not in header.lower()
         ):
-            if original_header in max_scores:
+            if merge_mode:
+                # في التجميع لا نعتمد على max_scores؛ نجمع الدرجات المكتوبة فعليًا في ملفات المصححات
+                points_cols_for_total.append(col_letter)
+                for cell in col:
+                    cell.fill = points_fill
+
+            elif original_header in max_scores:
                 points_cols_for_total.append(col_letter)
 
                 for cell in col:
@@ -1110,4 +1116,5 @@ st.markdown("""
     <div class="footer-left">رئيسة المركز: أ. خلود يعقوب بدو</div>
 </div>
 """, unsafe_allow_html=True)
+
 
