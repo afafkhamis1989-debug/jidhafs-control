@@ -27,7 +27,7 @@ LOCAL_REPORT_FILE = APP_DATA_DIR / "reports.xlsx"
 GRADE_TEMPLATES_FILE = APP_DATA_DIR / "grade_templates.json"
 
 # ضعي رابط Google Apps Script هنا لاحقًا
-GOOGLE_SCRIPT_URL = "PUT_YOUR_GOOGLE_SCRIPT_URL_HERE"
+GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby1miY6jZcCNqtYtWZzaSkDVZRSOyeKzl2eN9aGrlnLkRCEC619vL8eLzYstP9pieKo0w/exec"
 
 # كلمة مرور الأدمن
 ADMIN_PASSWORD = "Jidhafs!1825"
