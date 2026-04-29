@@ -708,6 +708,8 @@ with tab1:
         st.markdown("---")
         st.markdown("### 🟩 تحديد درجات الأسئلة")
 
+        # لا نعتمد الدرجة تلقائيًا من الاستجابات؛ لأن أعلى درجة موجودة قد تكون درجة طالبة وليست الدرجة الكبرى للسؤال.
+        # المستخدم يكتب الدرجة الكبرى من الإجابة النموذجية، والبرنامج يجمع ما تم إدخاله فقط.
         detected_scores, unknown_points = detect_max_scores_from_data(df)
         templates = load_grade_templates()
         signature = get_file_signature(df)
@@ -719,11 +721,12 @@ with tab1:
             if is_points_column(header):
                 saved_value = saved_template.get("max_scores", {}).get(header)
                 detected_value = detected_scores.get(header)
-                default_value = saved_value if saved_value is not None else detected_value
+                default_value = saved_value if saved_value is not None else 0
                 all_points_items.append({
                     "عمود الدرجة": header,
                     "السؤال": find_related_question(header, list(df.columns)),
                     "الدرجة الكبرى": default_value,
+                    "أعلى درجة موجودة في الملف": detected_value if detected_value is not None else "غير محدد",
                 })
 
         if not all_points_items:
@@ -731,7 +734,7 @@ with tab1:
             max_scores = {}
             can_split = False
         else:
-            st.info("راجعي الدرجة الكبرى لكل سؤال. إذا كانت الدرجة غير صحيحة تقدرين تعديلها قبل التقسيم.")
+            st.info("اكتبي الدرجة الكبرى لكل سؤال من الإجابة النموذجية. البرنامج سيجمع الدرجات التي تدخلينها فقط حتى تتأكدين من الدرجة النهائية للاختبار.")
             max_scores = {}
 
             for idx, item in enumerate(all_points_items, start=1):
@@ -741,6 +744,7 @@ with tab1:
                 with st.container(border=True):
                     st.markdown(f"**{idx}. عمود الدرجة:** `{item['عمود الدرجة']}`")
                     st.caption(f"السؤال المرتبط: {item['السؤال']}")
+                    st.caption(f"أعلى درجة موجودة في ملف الاستجابات فقط للمراجعة: {item['أعلى درجة موجودة في الملف']}")
                     score = st.number_input(
                         "الدرجة الكبرى",
                         min_value=0.0,
@@ -788,12 +792,12 @@ with tab1:
                     total_exam_score = int(total_exam_score)
 
                 scores_df = pd.DataFrame([
-                    {"عمود الدرجة": k, "الدرجة الكبرى": v}
+                    {"عمود الدرجة": k, "الدرجة الكبرى التي أدخلها المستخدم": v}
                     for k, v in max_scores.items()
                 ])
 
                 total_row = pd.DataFrame([
-                    {"عمود الدرجة": "المجموع الكلي / الدرجة النهائية للاختبار", "الدرجة الكبرى": total_exam_score}
+                    {"عمود الدرجة": "المجموع الكلي / الدرجة النهائية للاختبار", "الدرجة الكبرى التي أدخلها المستخدم": total_exam_score}
                 ])
 
                 scores_df = pd.concat([scores_df, total_row], ignore_index=True)
