@@ -655,7 +655,9 @@ def apply_ui_style():
         <h1>مركز التصحيح المركزي بمدرسة جدحفص الثانوية للبنات</h1>
     </div>
 
-    <div class="signature">رئيسة المركز: أ. خلود يعقوب بدو</div>
+    <div class="fixed-footer footer-right">تصميم وبرمجة: أ. عفاف حسين</div>
+    <div class="fixed-footer footer-center">إشراف: أ. أمينة الصائغ</div>
+    <div class="fixed-footer footer-left">رئيسة المركز: أ. خلود يعقوب بدو</div>
     """, unsafe_allow_html=True)
 
 
