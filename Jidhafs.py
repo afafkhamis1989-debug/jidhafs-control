@@ -123,6 +123,12 @@ def login_screen():
         return True
 
     st.markdown("<h2 style='text-align:center;'>🔐 تسجيل الدخول</h2>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div style='text-align:center; color:gray; font-size:13px; margin-bottom:10px;'>"
+        f"تم التحديث لآخر إصدار {version} بتاريخ {today}"
+        f"</div>",
+        unsafe_allow_html=True
+    )
 
     role = st.radio("نوع الدخول", ["مستخدم", "أدمن"], horizontal=True)
 
@@ -1133,7 +1139,5 @@ st.markdown(f"""
     <div class="footer-left">رئيسة المركز: أ. خلود يعقوب بدر</div>
 </div>
 
-<div style="text-align:center; margin-top:10px; font-size:12px; color:gray;">
-    تم التحديث لآخر إصدار {version} بتاريخ {today}
-</div>
+
 """, unsafe_allow_html=True)
