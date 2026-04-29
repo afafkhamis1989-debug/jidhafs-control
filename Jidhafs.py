@@ -386,7 +386,7 @@ def add_score_validation(ws, max_scores):
             dv.errorTitle = "خطأ في الدرجة"
             dv.error = f"الدرجة المدخلة أكبر من الدرجة المسموح بها. الحد الأعلى هو {max_score}."
             dv.promptTitle = "تنبيه"
-            dv.prompt = f"اكتبي درجة من 0 إلى {max_score} فقط."
+            dv.prompt = f"اكتب درجة من 0 إلى {max_score} فقط."
             dv.showErrorMessage = True
             dv.showInputMessage = True
             ws.add_data_validation(dv)
@@ -732,7 +732,7 @@ with tab1:
 
         default_new_name = safe_filename(Path(original_file_name).stem)
         new_base_name = st.text_input(
-            "اكتبي اسم الملف الجديد قبل التقسيم",
+            "اكتب اسم الملف الجديد قبل التقسيم",
             value=default_new_name,
             help="مثال: تقن106 — ستكون الملفات: تقن106-1، تقن106-2 ...",
         )
