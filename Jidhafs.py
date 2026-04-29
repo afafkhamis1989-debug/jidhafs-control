@@ -858,10 +858,10 @@ with tab1:
                     save_grade_templates(templates)
                     st.success("تم حفظ قالب الدرجات بنجاح ✅")
                 else:
-                    st.error("لازم تكتبين الدرجة الكبرى لكل أعمدة Points قبل الحفظ.")
+                    st.error("يجب كتابة الدرجة الكبرى لكل أعمدة Points قبل الحفظ.")
 
             if not can_split:
-                st.warning("باقي أعمدة بدون درجة كبرى: " + "، ".join(missing_scores))
+                st.warning("باقي من الأعمدة بدون درجة كبرى: " + "، ".join(missing_scores))
 
         if max_scores:
             total_exam_score = sum(float(v) for v in max_scores.values())
