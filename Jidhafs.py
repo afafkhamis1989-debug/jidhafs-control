@@ -15,9 +15,6 @@ from openpyxl.styles import Alignment, Font, PatternFill, Border, Side, Protecti
 from openpyxl.worksheet.datavalidation import DataValidation
 
 
-# =========================
-# إعدادات عامة
-# =========================
 st.set_page_config(page_title="مركز التصحيح المركزي", layout="wide")
 
 APP_DATA_DIR = Path.home() / "Jidhafs_Control_Center_Data"
@@ -26,19 +23,12 @@ APP_DATA_DIR.mkdir(exist_ok=True)
 LOCAL_REPORT_FILE = APP_DATA_DIR / "reports.xlsx"
 GRADE_TEMPLATES_FILE = APP_DATA_DIR / "grade_templates.json"
 
-# ضعي رابط Google Apps Script هنا لاحقًا
 GOOGLE_SCRIPT_URL = "PUT_YOUR_GOOGLE_SCRIPT_URL_HERE"
 
-# كلمة مرور الأدمن
 ADMIN_PASSWORD = "Jidhafs!1825"
-
-# كلمة مرور موحدة للمستخدمين العاديين
 USER_PASSWORD = "User!1234"
 
 
-# =========================
-# أدوات مساعدة
-# =========================
 def clean_header(header):
     header = str(header or "")
     header = header.replace("\xa0", " ")
@@ -93,9 +83,6 @@ def get_file_signature(df):
     return hashlib.md5(cols.encode("utf-8")).hexdigest()
 
 
-# =========================
-# تسجيل الدخول
-# =========================
 def login_screen():
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
@@ -138,28 +125,12 @@ def login_screen():
     return False
 
 
-# =========================
-# التقرير المحلي + Google Sheet
-# =========================
 def append_local_report(record):
     columns = [
-        "اليوم",
-        "التاريخ",
-        "الساعة",
-        "اسم المستخدم",
-        "نوع المستخدم",
-        "نوع العملية",
-        "اسم الملف الأصلي",
-        "اسم الملف الجديد",
-        "أسماء الأجزاء",
-        "عدد الأجزاء",
-        "عدد الاستجابات",
-        "عدد الاستجابات في كل جزء",
-        "هل تم التقسيم",
-        "هل تم التجميع",
-        "اسم ملف التجميع",
-        "الحالة",
-        "ملاحظات",
+        "اليوم", "التاريخ", "الساعة", "اسم المستخدم", "نوع المستخدم",
+        "نوع العملية", "اسم الملف الأصلي", "اسم الملف الجديد", "أسماء الأجزاء",
+        "عدد الأجزاء", "عدد الاستجابات", "عدد الاستجابات في كل جزء",
+        "هل تم التقسيم", "هل تم التجميع", "اسم ملف التجميع", "الحالة", "ملاحظات"
     ]
 
     df_new = pd.DataFrame([record], columns=columns)
@@ -179,7 +150,6 @@ def append_local_report(record):
 def send_report_to_google(record):
     if not GOOGLE_SCRIPT_URL or GOOGLE_SCRIPT_URL == "PUT_YOUR_GOOGLE_SCRIPT_URL_HERE":
         return False
-
     try:
         response = requests.post(GOOGLE_SCRIPT_URL, json=record, timeout=8)
         return response.status_code in [200, 201]
@@ -226,9 +196,6 @@ def log_operation(
     send_report_to_google(record)
 
 
-# =========================
-# إعدادات الأعمدة والدرجات
-# =========================
 hidden_headers = [
     "id",
     "start time",
@@ -273,8 +240,8 @@ def is_points_column(header):
 
 def find_related_question(points_header, all_headers):
     points_header_clean = clean_header(points_header)
+    possible_question = re.sub(r"^points\s*-\s*", "", points_header_clean, flags=re.IGNORECASE).strip()
 
-    possible_question = re.sub(r"^points[ ]*-[ ]*", "", points_header_clean, flags=re.IGNORECASE).strip()
     if possible_question and possible_question != points_header_clean:
         for h in all_headers:
             if clean_header(h) == possible_question:
@@ -285,15 +252,15 @@ def find_related_question(points_header, all_headers):
 
 
 def extract_score_from_text(text):
-    """يستخرج مجموع الدرجات الظاهرة من نص السؤال (مثل: 5 درجات، ٥ درجات)
-    ويجمعها إذا كان في أكثر من بند."""
+    """
+    يقرأ الدرجات الظاهرة في نص السؤال مثل:
+    5 درجات، ٥ درجات
+    وإذا السؤال فيه أكثر من درجة يجمعها.
+    """
     text = str(text or "")
-
-    # تحويل الأرقام العربية إلى إنجليزية
     arabic_digits = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
     text = text.translate(arabic_digits)
 
-    # استخراج كل الأرقام المرتبطة بكلمة درجة/درجات
     matches = re.findall(r"([0-9]+(?:[.][0-9]+)?)[ ]*درجات?", text)
 
     if matches:
@@ -303,43 +270,41 @@ def extract_score_from_text(text):
     return None
 
 
-def detect_max_scores_from_data(df):
-    max_scores = {}
-    unknown_points = []
-    all_headers = list(df.columns)
+def is_likert_group(header, all_headers):
+    """
+    محاولة ذكية لاكتشاف أعمدة Likert/الجدول:
+    إذا تكرر نفس أساس السؤال في أكثر من عمود Points نعتبره تابع.
+    """
+    base = re.sub(r"^points\s*-\s*", "", clean_header(header), flags=re.IGNORECASE).strip()
 
-    for col in df.columns:
-        header = clean_header(col)
-        if not is_points_column(header):
-            continue
+    count = 0
+    for h in all_headers:
+        h_clean = clean_header(h)
+        if is_points_column(h_clean):
+            h_base = re.sub(r"^points\s*-\s*", "", h_clean, flags=re.IGNORECASE).strip()
+            if h_base == base:
+                count += 1
 
-        values = pd.to_numeric(df[col], errors="coerce").dropna()
-        if len(values) > 0:
-            max_value = float(values.max())
-            if max_value > 0:
-                if max_value.is_integer():
-                    max_value = int(max_value)
-                max_scores[header] = max_value
-            else:
-                unknown_points.append({
-                    "عمود الدرجة": header,
-                    "السؤال": find_related_question(header, all_headers),
-                    "الدرجة الكبرى": None,
-                })
-        else:
-            unknown_points.append({
-                "عمود الدرجة": header,
-                "السؤال": find_related_question(header, all_headers),
-                "الدرجة الكبرى": None,
-            })
+    return count > 1
 
-    return max_scores, unknown_points
+
+def detect_score_from_points_column(df, col):
+    values = pd.to_numeric(df[col], errors="coerce").dropna()
+    if len(values) == 0:
+        return None
+
+    max_val = float(values.max())
+    if max_val > 0:
+        return int(max_val) if max_val.is_integer() else max_val
+
+    return None
 
 
 def update_points_headers_with_max(ws, max_scores):
     for col in ws.columns:
         cell = col[0]
         header = clean_header(cell.value)
+
         if header in max_scores:
             if "الدرجة من" not in header:
                 cell.value = f"{header} / الدرجة من {max_scores[header]}"
@@ -353,6 +318,7 @@ def add_score_validation(ws, max_scores):
 
         if original_header in max_scores:
             max_score = max_scores[original_header]
+
             dv = DataValidation(
                 type="decimal",
                 operator="between",
@@ -370,9 +336,6 @@ def add_score_validation(ws, max_scores):
             dv.add(f"{col_letter}2:{col_letter}{ws.max_row}")
 
 
-# =========================
-# تنسيق Excel
-# =========================
 def format_excel_file(
     excel_bytes,
     lock_sheet=False,
@@ -433,8 +396,6 @@ def format_excel_file(
             for cell in col:
                 cell.fill = total_fill
 
-        # تلوين وفتح أعمدة الدرجات كاملة
-        # نعتمد هنا على الاسم الظاهر بعد إضافة / الدرجة من ... حتى لا يفوت أي عمود Points
         if (
             "points" in header.lower()
             and "total points" not in header.lower()
@@ -442,15 +403,17 @@ def format_excel_file(
             and "points - الرقم الأكاديمي" not in header.lower()
             and "points - الشعبة" not in header.lower()
         ):
-            points_cols_for_total.append(col_letter)
+            if original_header in max_scores:
+                points_cols_for_total.append(col_letter)
 
-            # ✅ تلوين عمود الدرجات كاملًا باللون الأخضر الفاتح، من العنوان إلى آخر استجابة
-            for cell in col:
-                cell.fill = points_fill
+                for cell in col:
+                    cell.fill = points_fill
 
-            if lock_sheet:
-                for cell in col[1:]:
-                    cell.protection = Protection(locked=False)
+                if lock_sheet:
+                    for cell in col[1:]:
+                        cell.protection = Protection(locked=False)
+            else:
+                ws.column_dimensions[col_letter].hidden = True
 
         if merge_mode:
             if header_lower == "رقم":
@@ -484,6 +447,7 @@ def format_excel_file(
             formula = "+".join([f"{col}{row_num}" for col in points_cols_for_total])
             ws[f"{total_col_letter}{row_num}"] = f"={formula}"
             ws[f"{total_col_letter}{row_num}"].fill = total_fill
+
             if lock_sheet:
                 ws[f"{total_col_letter}{row_num}"].protection = Protection(locked=True)
 
@@ -491,19 +455,23 @@ def format_excel_file(
 
     for row in ws.iter_rows():
         row_num = row[0].row
+
         if row_num == 1:
             ws.row_dimensions[row_num].height = 60
             continue
 
         needed_height = 35
+
         for cell in row:
             col_letter = cell.column_letter
+
             if ws.column_dimensions[col_letter].hidden:
                 continue
             if not cell.value:
                 continue
 
             text = str(cell.value).strip()
+
             if len(text) < 20:
                 continue
 
@@ -511,6 +479,7 @@ def format_excel_file(
             chars_per_line = max(int(width * 1.35), 18)
             estimated_lines = text.count("\n") + (len(text) // chars_per_line) + 1
             cell_height = estimated_lines * 18
+
             needed_height = max(needed_height, cell_height)
 
         ws.row_dimensions[row_num].height = min(max(needed_height, 35), 409)
@@ -527,9 +496,6 @@ def format_excel_file(
     return output
 
 
-# =========================
-# ترتيب ملفات التجميع
-# =========================
 def get_part_number(filename):
     match = re.search(r"(?:مظروف|جزء|[-_\s])(\d+)(?:\.xlsx)?$", filename)
     if match:
@@ -552,12 +518,10 @@ def detect_base_name_from_parts(files):
     return safe_filename(base or "الاستجابات")
 
 
-# =========================
-# تصميم الواجهة
-# =========================
 def apply_ui_style():
     logo_base64 = get_logo_base64()
     logo_html = ""
+
     if logo_base64:
         logo_html = f'<img src="data:image/png;base64,{logo_base64}" class="logo-img">'
 
@@ -567,6 +531,7 @@ def apply_ui_style():
         max-width: 1250px;
         margin: auto;
         padding-top: 2rem;
+        padding-bottom: 5rem;
     }}
 
     .jidhafs-title {{
@@ -618,16 +583,29 @@ def apply_ui_style():
         text-align: center !important;
     }}
 
-    .signature {{
+    .fixed-footer {{
         position: fixed;
-        bottom: 20px;
-        left: 20px;
+        bottom: 18px;
+        z-index: 9999;
+        background: rgba(255,255,255,0.88);
+        padding: 6px 12px;
+        border-radius: 10px;
         font-weight: bold;
         font-size: 14px;
-        z-index: 9999;
-        background: rgba(255,255,255,0.8);
-        padding: 4px 8px;
-        border-radius: 8px;
+        box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+    }}
+
+    .footer-right {{
+        right: 20px;
+    }}
+
+    .footer-center {{
+        left: 50%;
+        transform: translateX(-50%);
+    }}
+
+    .footer-left {{
+        left: 20px;
     }}
     </style>
 
@@ -636,21 +614,22 @@ def apply_ui_style():
         <h1>مركز التصحيح المركزي بمدرسة جدحفص الثانوية للبنات</h1>
     </div>
 
-    <div class="signature">رئيسة المركز: أ. خلود يعقوب بدو</div>
+    <div class="fixed-footer footer-right">تصميم وبرمجة: أ. عفاف حسين</div>
+    <div class="fixed-footer footer-center">إشراف: أ. أمينة الصائغ</div>
+    <div class="fixed-footer footer-left">رئيسة المركز: أ. خلود يعقوب بدو</div>
     """, unsafe_allow_html=True)
 
 
-# =========================
-# التطبيق
-# =========================
 if not login_screen():
     st.stop()
 
 apply_ui_style()
 
 col_user, col_logout = st.columns([4, 1])
+
 with col_user:
     st.info(f"مرحبًا، {st.session_state.username} — نوع الدخول: {st.session_state.role}")
+
 with col_logout:
     if st.button("تسجيل خروج"):
         st.session_state.logged_in = False
@@ -665,9 +644,6 @@ else:
     tab3 = None
 
 
-# =========================
-# تبويب التقسيم
-# =========================
 with tab1:
     st.markdown("<h3>✂️ تقسيم ملف الاستجابات</h3>", unsafe_allow_html=True)
 
@@ -726,9 +702,6 @@ with tab1:
         st.markdown("---")
         st.markdown("### 🟩 تحديد درجات الأسئلة")
 
-        # لا نعتمد على أعلى درجة في الاستجابات كدرجة كبرى؛ لأنها قد تكون درجة طالبة فقط.
-        # نحاول قراءة الدرجة الظاهرة في نص السؤال فقط، والناقص يترك 0.00 ليدخله المستخدم من الإجابة النموذجية.
-        detected_scores, unknown_points = detect_max_scores_from_data(df)
         templates = load_grade_templates()
         signature = get_file_signature(df)
         saved_template = templates.get(signature, {})
@@ -738,21 +711,29 @@ with tab1:
 
         for col in df.columns:
             header = clean_header(col)
+
             if is_points_column(header):
                 question_text = find_related_question(header, list(df.columns))
                 saved_value = saved_template.get("max_scores", {}).get(header)
                 visible_score = extract_score_from_text(question_text)
-                detected_value = detected_scores.get(header)
+                detected_score = detect_score_from_points_column(df, col)
 
-                if saved_value is not None and float(saved_value) > 0:
+                if is_likert_group(header, df.columns):
+                    default_value = 0
+                    source = "Likert / تابع لا يُحسب"
+
+                elif saved_value is not None and float(saved_value) > 0:
                     default_value = saved_value
                     source = "قالب محفوظ"
+
                 elif visible_score is not None:
                     default_value = visible_score
                     source = "درجة ظاهرة في السؤال"
-                elif detected_value is not None and float(detected_value) > 0:
-                    default_value = detected_value
-                    source = "درجة تلقائية من عمود Points"
+
+                elif detected_score is not None:
+                    default_value = detected_score
+                    source = "تلقائي من Points"
+
                 else:
                     default_value = 0
                     source = "مدخل من المستخدم"
@@ -764,7 +745,6 @@ with tab1:
                     "السؤال": question_text,
                     "الدرجة الكبرى": default_value,
                     "المصدر": source,
-                    "أعلى درجة موجودة في الملف": detected_value if detected_value is not None else "غير محدد",
                 })
 
         if not all_points_items:
@@ -772,8 +752,10 @@ with tab1:
             max_scores = {}
             can_split = False
         else:
-            st.info("البرنامج يضع الدرجات التلقائية الموجودة في أعمدة Points داخل خانة الدرجة الكبرى، وأي سؤال لا توجد له درجة تلقائية يبقى 0.00 لتدخلين درجته من الإجابة النموذجية.")
+            st.info("البرنامج يضع الدرجات التلقائية مكان 0.00، والدرجات غير الواضحة تبقى 0.00 لتدخلينها من الإجابة النموذجية.")
+
             max_scores = {}
+            excluded_columns = []
 
             for idx, item in enumerate(all_points_items, start=1):
                 current_value = item["الدرجة الكبرى"]
@@ -783,6 +765,16 @@ with tab1:
                     st.markdown(f"**{idx}. عمود الدرجة:** `{item['عمود الدرجة']}`")
                     st.caption(f"السؤال المرتبط: {item['السؤال']}")
                     st.caption(f"مصدر الدرجة الحالية: {item['المصدر']}")
+
+                    if item["المصدر"] == "Likert / تابع لا يُحسب":
+                        include_col = st.checkbox(
+                            "إدخال هذا العمود في المجموع",
+                            value=False,
+                            key=f"include_{signature}_{idx}_{item['عمود الدرجة']}",
+                        )
+                    else:
+                        include_col = True
+
                     score = st.number_input(
                         "الدرجة الكبرى",
                         min_value=0.0,
@@ -791,7 +783,7 @@ with tab1:
                         key=f"score_{signature}_{idx}_{item['عمود الدرجة']}",
                     )
 
-                    if score > 0:
+                    if include_col and score > 0:
                         final_score = int(score) if float(score).is_integer() else score
                         max_scores[item["عمود الدرجة"]] = final_score
 
@@ -801,11 +793,14 @@ with tab1:
                             score_sources[item["عمود الدرجة"]] = "تم تعديله من المستخدم"
                         else:
                             score_sources[item["عمود الدرجة"]] = item["المصدر"]
+                    else:
+                        excluded_columns.append(item["عمود الدرجة"])
 
             missing_scores = [
                 item["عمود الدرجة"]
                 for item in all_points_items
-                if item["عمود الدرجة"] not in max_scores
+                if item["المصدر"] != "Likert / تابع لا يُحسب"
+                and item["عمود الدرجة"] not in max_scores
             ]
 
             can_split = len(missing_scores) == 0
@@ -820,7 +815,7 @@ with tab1:
                     save_grade_templates(templates)
                     st.success("تم حفظ قالب الدرجات بنجاح ✅")
                 else:
-                    st.error("لازم تكتبين الدرجة الكبرى لكل أعمدة Points قبل الحفظ.")
+                    st.error("لازم تكتبين الدرجة الكبرى لكل الأعمدة المطلوبة قبل الحفظ.")
 
             if not can_split:
                 st.warning("باقي أعمدة بدون درجة كبرى: " + "، ".join(missing_scores))
@@ -850,7 +845,7 @@ with tab1:
                     {
                         "عمود الدرجة": "المجموع الكلي / الدرجة النهائية للاختبار",
                         "الدرجة المعتمدة": total_exam_score,
-                        "المصدر": "مجموع الدرجات الظاهرة والمدخلة",
+                        "المصدر": "مجموع الدرجات المعتمدة فقط",
                     }
                 ])
 
@@ -859,7 +854,7 @@ with tab1:
                 st.dataframe(scores_df, use_container_width=True)
                 st.success(f"📌 الدرجة النهائية للاختبار: {total_exam_score}")
             else:
-                st.info("لا توجد درجات محددة حتى الآن.")
+                st.info("لا توجد درجات معتمدة حتى الآن.")
 
         if st.button("✂️ تقسيم الاستجابات وتنزيل الملفات", disabled=not can_split):
             zip_buffer = BytesIO()
@@ -915,9 +910,6 @@ with tab1:
             )
 
 
-# =========================
-# تبويب التجميع
-# =========================
 with tab2:
     st.markdown("<h3>📥 تجميع ملفات الاستجابات المقسمة</h3>", unsafe_allow_html=True)
 
@@ -987,9 +979,6 @@ with tab2:
             )
 
 
-# =========================
-# تبويب تقرير الأدمن
-# =========================
 if tab3 is not None:
     with tab3:
         st.markdown("<h3>📊 تقرير الأدمن</h3>", unsafe_allow_html=True)
