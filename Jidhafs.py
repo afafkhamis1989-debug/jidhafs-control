@@ -269,28 +269,33 @@ hidden_headers = [
 ]
 
 
+def _is_student_info_field(header):
+    """هل هذا الحقل متعلق ببيانات الطالبة (اسم، رقم، شعبة) وليس سؤالاً حقيقياً؟"""
+    h = clean_header(header).lower()
+    return any(x in h for x in [
+        "اسم الطالبة", "الاسم الرباعي", "بيانات الطالبة",
+        "الرقم الأكاديمي", "رقم الاكاديمي", "رقم أكاديمي",
+        "الشعبة", "student name", "student id", "section",
+    ])
+
+
 def should_auto_hide(header):
     header_lower = clean_header(header).lower()
     return (
         "feedback" in header_lower
         or header_lower in hidden_headers
-        or "بيانات الطالبة" in header_lower
-        or "اسم الطالبة" in header_lower
-        or "الرقم الأكاديمي" in header_lower
-        or "رقم الأكاديمي" in header_lower
+        or _is_student_info_field(header)
     )
 
 
 def is_points_column(header):
     header_lower = clean_header(header).lower()
+    # أي عمود Points مرتبط ببيانات الطالبة يُستثنى تلقائياً
+    if _is_student_info_field(header):
+        return False
     return (
         "points" in header_lower
         and header_lower != "total points"
-        and header_lower not in [
-            "points - الاسم الرباعي",
-            "points - الرقم الأكاديمي",
-            "points - الشعبة",
-        ]
     )
 
 
@@ -460,16 +465,8 @@ def format_excel_file(
             for cell in col:
                 cell.fill = total_fill
 
-        # أعمدة الدرجات:
-        # في التقسيم: الأعمدة المعتمدة فقط تظهر وتدخل في Total points، والمستبعدة/المؤكدة صفر تُخفى وتُقفل.
-        # في التجميع: نرجع الملف لشكله الأصلي ونحسب Total points من كل أعمدة Points الموجودة في الملفات المصححة.
-        if (
-            "points" in header.lower()
-            and "total points" not in header.lower()
-            and "points - الاسم الرباعي" not in header.lower()
-            and "points - الرقم الأكاديمي" not in header.lower()
-            and "points - الشعبة" not in header.lower()
-        ):
+        # أعمدة الدرجات — نستخدم is_points_column الذي يستثني بيانات الطالبة تلقائياً
+        if is_points_column(original_header):
             if merge_mode:
                 # في التجميع لا نعتمد على max_scores؛ نجمع الدرجات المكتوبة فعليًا في ملفات المصححات
                 points_cols_for_total.append(col_letter)
