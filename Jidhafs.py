@@ -1054,9 +1054,13 @@ with tab1:
             df_roster = pd.read_excel(roster_file, engine="openpyxl")
             st.success(f"✅ تم رفع ملف المعنيات — عدد الطالبات: {len(df_roster)}")
 
-            # اكتشاف الأعمدة تلقائياً
-            roster_cols = detect_roster_columns(df_roster)
-            resp_cols = detect_response_columns(df)
+            # اكتشاف الأعمدة تلقائياً — نحفظها في session_state حتى لا تُعاد عند كل rerun
+            sig_key = f"cols_detected_{original_file_name}_{roster_file.name}"
+            if sig_key not in st.session_state:
+                st.session_state[sig_key] = {
+                    'resp': detect_response_columns(df),
+                    'roster': detect_roster_columns(df_roster),
+                }
 
             # عرض الأعمدة المكتشفة
             with st.expander("🔍 الأعمدة المكتشفة تلقائياً — راجعيها وعدّليها إذا لزم"):
@@ -1064,44 +1068,47 @@ with tab1:
                 with col_r1:
                     st.markdown("**ملف الاستجابات:**")
                     all_resp_cols = ["— لا يوجد —"] + list(df.columns)
-                    resp_cols['email'] = st.selectbox("عمود الإيميل", all_resp_cols,
-                        index=all_resp_cols.index(resp_cols['email']) if resp_cols['email'] in all_resp_cols else 0,
-                        key="resp_email_col")
-                    resp_cols['name_en'] = st.selectbox("عمود الاسم الإنجليزي", all_resp_cols,
-                        index=all_resp_cols.index(resp_cols['name_en']) if resp_cols['name_en'] in all_resp_cols else 0,
-                        key="resp_nameen_col")
-                    resp_cols['name_ar'] = st.selectbox("عمود الاسم العربي", all_resp_cols,
-                        index=all_resp_cols.index(resp_cols['name_ar']) if resp_cols['name_ar'] in all_resp_cols else 0,
-                        key="resp_namear_col")
-                    resp_cols['student_id'] = st.selectbox("عمود الرقم الأكاديمي", all_resp_cols,
-                        index=all_resp_cols.index(resp_cols['student_id']) if resp_cols['student_id'] in all_resp_cols else 0,
-                        key="resp_id_col")
-                    # تحويل "لا يوجد" لـ None
-                    for k in resp_cols:
-                        if resp_cols[k] == "— لا يوجد —":
-                            resp_cols[k] = None
+                    detected_resp = st.session_state[sig_key]['resp']
+
+                    def _idx_r(key):
+                        v = detected_resp.get(key)
+                        return all_resp_cols.index(v) if v in all_resp_cols else 0
+
+                    resp_email_sel    = st.selectbox("عمود الإيميل",           all_resp_cols, index=_idx_r('email'),      key="resp_email_col")
+                    resp_nameen_sel   = st.selectbox("عمود الاسم الإنجليزي",   all_resp_cols, index=_idx_r('name_en'),    key="resp_nameen_col")
+                    resp_namear_sel   = st.selectbox("عمود الاسم العربي",       all_resp_cols, index=_idx_r('name_ar'),    key="resp_namear_col")
+                    resp_id_sel       = st.selectbox("عمود الرقم الأكاديمي",   all_resp_cols, index=_idx_r('student_id'), key="resp_id_col")
 
                 with col_r2:
                     st.markdown("**ملف المعنيات:**")
                     all_roster_cols = ["— لا يوجد —"] + list(df_roster.columns)
-                    roster_cols['email'] = st.selectbox("عمود الإيميل", all_roster_cols,
-                        index=all_roster_cols.index(roster_cols['email']) if roster_cols['email'] in all_roster_cols else 0,
-                        key="roster_email_col")
-                    roster_cols['name_en'] = st.selectbox("عمود الاسم الإنجليزي", all_roster_cols,
-                        index=all_roster_cols.index(roster_cols['name_en']) if roster_cols['name_en'] in all_roster_cols else 0,
-                        key="roster_nameen_col")
-                    roster_cols['name_ar'] = st.selectbox("عمود الاسم العربي", all_roster_cols,
-                        index=all_roster_cols.index(roster_cols['name_ar']) if roster_cols['name_ar'] in all_roster_cols else 0,
-                        key="roster_namear_col")
-                    roster_cols['student_id'] = st.selectbox("عمود الرقم الأكاديمي", all_roster_cols,
-                        index=all_roster_cols.index(roster_cols['student_id']) if roster_cols['student_id'] in all_roster_cols else 0,
-                        key="roster_id_col")
-                    roster_cols['section'] = st.selectbox("عمود الشعبة (اختياري)", all_roster_cols,
-                        index=all_roster_cols.index(roster_cols['section']) if roster_cols['section'] in all_roster_cols else 0,
-                        key="roster_section_col")
-                    for k in roster_cols:
-                        if roster_cols[k] == "— لا يوجد —":
-                            roster_cols[k] = None
+                    detected_roster = st.session_state[sig_key]['roster']
+
+                    def _idx_ro(key):
+                        v = detected_roster.get(key)
+                        return all_roster_cols.index(v) if v in all_roster_cols else 0
+
+                    roster_email_sel   = st.selectbox("عمود الإيميل",           all_roster_cols, index=_idx_ro('email'),      key="roster_email_col")
+                    roster_nameen_sel  = st.selectbox("عمود الاسم الإنجليزي",   all_roster_cols, index=_idx_ro('name_en'),    key="roster_nameen_col")
+                    roster_namear_sel  = st.selectbox("عمود الاسم العربي",       all_roster_cols, index=_idx_ro('name_ar'),    key="roster_namear_col")
+                    roster_id_sel      = st.selectbox("عمود الرقم الأكاديمي",   all_roster_cols, index=_idx_ro('student_id'), key="roster_id_col")
+                    roster_section_sel = st.selectbox("عمود الشعبة (اختياري)", all_roster_cols, index=_idx_ro('section'),    key="roster_section_col")
+
+            def _none(v): return None if v == "— لا يوجد —" else v
+
+            resp_cols = {
+                'email':      _none(resp_email_sel),
+                'name_en':    _none(resp_nameen_sel),
+                'name_ar':    _none(resp_namear_sel),
+                'student_id': _none(resp_id_sel),
+            }
+            roster_cols = {
+                'email':      _none(roster_email_sel),
+                'name_en':    _none(roster_nameen_sel),
+                'name_ar':    _none(roster_namear_sel),
+                'student_id': _none(roster_id_sel),
+                'section':    _none(roster_section_sel),
+            }
 
             if st.button("🔍 تشغيل فحص الحضور والمطابقة", type="primary"):
                 with st.spinner("جاري المطابقة..."):
