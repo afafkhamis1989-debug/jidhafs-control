@@ -969,6 +969,55 @@ def detect_base_name_from_parts(files):
 
 
 # =========================
+# حساب الدرجات النهائية للرصد والتجميع
+# =========================
+def get_score_columns_for_total(df):
+    """يرجع أعمدة الدرجات الحقيقية فقط، ويستثني Total Points ودرجات بيانات الطالبة."""
+    score_cols = []
+    for col in df.columns:
+        header = clean_header(col)
+        h = header.lower()
+        original_header = header.split(" / الدرجة من ")[0].strip()
+        if (
+            "points" in h
+            and h != "total points"
+            and not _is_student_info_field(original_header)
+        ):
+            score_cols.append(col)
+    return score_cols
+
+
+def recompute_total_points_dataframe(df):
+    """يعيد حساب Total Points من أعمدة Points داخل DataFrame قبل الرصد أو التجميع."""
+    df = df.copy()
+    score_cols = get_score_columns_for_total(df)
+
+    if not score_cols:
+        return df, None, []
+
+    total_values = pd.Series(0.0, index=df.index)
+    for col in score_cols:
+        total_values = total_values + pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+    total_values = total_values.round(2)
+    total_values = total_values.apply(lambda x: int(x) if float(x).is_integer() else x)
+
+    total_col = None
+    for col in df.columns:
+        if clean_header(col).lower() == "total points":
+            total_col = col
+            break
+
+    if total_col is None:
+        total_col = "Total Points"
+        df[total_col] = total_values
+    else:
+        df[total_col] = total_values
+
+    return df, total_col, score_cols
+
+
+# =========================
 # تصميم الواجهة
 # =========================
 def apply_ui_style():
@@ -1461,6 +1510,8 @@ with tab1:
               if total_exam_score.is_integer():
                   total_exam_score = int(total_exam_score)
               st.success(f"📌 الدرجة النهائية للاختبار: {total_exam_score}")
+              st.session_state["last_max_scores"] = max_scores
+              st.session_state["last_exam_total_score"] = total_exam_score
 
           with st.expander("عرض الدرجات الكبرى المعتمدة"):
               if max_scores:
@@ -1598,8 +1649,13 @@ with tab2:
             all_data.append(df_part)
 
         combined = pd.concat(all_data, ignore_index=True)
+        combined, recalculated_total_col, recalculated_score_cols = recompute_total_points_dataframe(combined)
 
         st.success(f"تم رفع {len(uploaded_files)} ملف، وعدد الاستجابات بعد التجميع: {len(combined)}")
+        if recalculated_total_col:
+            st.info(f"✅ تم حساب الدرجة النهائية تلقائيًا من {len(recalculated_score_cols)} أعمدة درجات، وسيظهر عمود Total Points في ملف الرصد.")
+        else:
+            st.warning("⚠️ لم يتم العثور على أعمدة Points لحساب الدرجة النهائية. تأكدي من رفع ملفات التصحيح المقسمة الصحيحة.")
         st.dataframe(combined.head(), use_container_width=True)
 
         if st.button("📥 تجميع وتنزيل الملف"):
@@ -1651,7 +1707,7 @@ with tab2:
             email_col   = _get_col(combined, ["email"])
             nameen_col  = _get_col(combined, ["^name$"]) or _get_col(combined, ["name"])
             namear_col  = _get_col(combined, ["الاسم الرباعي","اسم الطالبة","الاسم الثلاثي","الاسم الكامل","الاسم والرقم","بيانات الطالبة"])
-            total_col   = _get_col(combined, ["total points"])
+            total_col   = recalculated_total_col or _get_col(combined, ["total points"])
 
             # لو الاسم مدمج مع الرقم استخرج الاسم فقط (قبل " - ")
             def _extract_name(val):
@@ -1800,3 +1856,4 @@ st.markdown(f"""
 
 
 """, unsafe_allow_html=True)
+
