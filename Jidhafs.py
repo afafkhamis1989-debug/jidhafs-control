@@ -742,20 +742,32 @@ def match_student(response_row, roster_df, roster_cols, resp_cols):
     """
     تطابق صف استجابة واحد مع قائمة المعنيات.
     تُرجع (matched: bool, score: float, method: str)
-    """
-    best_score = 0.0
-    best_method = ""
 
-    # 1. مطابقة إيميل (الأقوى)
+    منطق المطابقة:
+    - إذا كان الإيميل موجوداً في ملف الاستجابات وفي ملف المعنيات → نعتمد الإيميل حاسماً
+      * إيميل طابق → مصرح ✅
+      * إيميل ما طابق → غير مصرح ❌ (لا نكمل للاسم)
+    - إذا ما في إيميل في أحد الملفين → نطابق بالرقم الأكاديمي ثم الاسم
+    """
+    # 1. مطابقة إيميل — حاسمة إذا توفرت في الملفين
     if roster_cols['email'] and resp_cols['email']:
         resp_email = normalize_email(_row_val(response_row, resp_cols['email']))
         if resp_email:
-            for _, roster_row in roster_df.iterrows():
-                roster_email = normalize_email(_row_val(roster_row, roster_cols['email']))
-                if resp_email == roster_email:
-                    return True, 1.0, "إيميل"
+            # تحقق هل في إيميلات في ملف المعنيات أصلاً
+            roster_has_emails = any(
+                normalize_email(_row_val(r, roster_cols['email']))
+                for _, r in roster_df.iterrows()
+            )
+            if roster_has_emails:
+                # الإيميل حاسم — إذا طابق نجاح، إذا ما طابق فشل فوري
+                for _, roster_row in roster_df.iterrows():
+                    roster_email = normalize_email(_row_val(roster_row, roster_cols['email']))
+                    if resp_email == roster_email:
+                        return True, 1.0, "إيميل"
+                # ما طابق أي إيميل → غير مصرح فوراً بدون تجاوز للاسم
+                return False, 0.0, "إيميل غير مصرح"
 
-    # 2. مطابقة رقم أكاديمي
+    # 2. مطابقة رقم أكاديمي (إذا ما في إيميل)
     if roster_cols['student_id'] and resp_cols['student_id']:
         resp_id = normalize_id(str(_row_val(response_row, resp_cols['student_id'])))
         if resp_id:
@@ -764,7 +776,9 @@ def match_student(response_row, roster_df, roster_cols, resp_cols):
                 if resp_id and roster_id and resp_id == roster_id:
                     return True, 0.98, "رقم أكاديمي"
 
-    # 3. مطابقة اسم عربي
+    # 3. مطابقة اسم عربي (fallback)
+    best_score = 0.0
+    best_method = ""
     if roster_cols['name_ar'] and resp_cols['name_ar']:
         resp_name_ar = _row_val(response_row, resp_cols['name_ar'])
         if resp_name_ar:
@@ -775,7 +789,7 @@ def match_student(response_row, roster_df, roster_cols, resp_cols):
                     best_score = score
                     best_method = f"اسم عربي ({score:.0%})"
 
-    # 4. مطابقة اسم إنجليزي
+    # 4. مطابقة اسم إنجليزي (fallback)
     if roster_cols['name_en'] and resp_cols['name_en']:
         resp_name_en = _row_val(response_row, resp_cols['name_en'])
         if resp_name_en:
