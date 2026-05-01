@@ -78,13 +78,29 @@ SCHOOL_OPTIONS = [
 
 
 def detect_school_column(df):
-    """يرجع اسم عمود المدرسة إذا كان موجودًا في الملف."""
+    """يرجع اسم عمود المدرسة فقط إذا كان الهيدر مطابقًا لاسم عمود مدرسة واضح.
+    مهم: لا نستخدم البحث الجزئي حتى لا يعتبر سؤالًا فيه كلمة school أنه عمود مدرسة.
+    """
+    school_headers = {
+        "school",
+        "school name",
+        "student school",
+        "student's school",
+        "student’s school",
+        "اسم المدرسة",
+        "المدرسة",
+        "مدرسة الطالبة",
+        "المدرسة التابع لها",
+        "المدرسة التابعة لها",
+        "المدرسة الأصلية",
+        "المدرسة الاصلية",
+    }
+
     for col in df.columns:
         h = clean_header(col).lower()
-        if any(x in h for x in ["school", "المدرسة", "اسم المدرسة", "مدرسة"]):
+        if h in school_headers:
             return col
     return None
-
 
 def arabic_day_name(dt):
     days = {
@@ -314,7 +330,9 @@ def should_auto_hide(header):
     hidden = [
         "id", "start time", "completion time", "email", "name",
         "grade posted time", "last modified time",
-        "school", "المدرسة", "اسم المدرسة",
+        "school", "school name", "student school", "student's school", "student’s school",
+        "المدرسة", "اسم المدرسة", "مدرسة الطالبة", "المدرسة التابع لها",
+        "المدرسة التابعة لها", "المدرسة الأصلية", "المدرسة الاصلية",
     ]
     return (
         "feedback" in h
@@ -1745,7 +1763,7 @@ with tab2:
             email_col   = _get_col(combined, ["email"])
             nameen_col  = _get_col(combined, ["^name$"]) or _get_col(combined, ["name"])
             namear_col  = _get_col(combined, ["الاسم الرباعي","اسم الطالبة","الاسم الثلاثي","الاسم الكامل","الاسم والرقم","بيانات الطالبة"])
-            school_col  = _get_col(combined, ["school", "المدرسة", "اسم المدرسة", "مدرسة"])
+            school_col  = detect_school_column(combined)
             total_col   = recalculated_total_col or _get_col(combined, ["total points"])
 
             # لو الاسم مدمج مع الرقم استخرج الاسم فقط (قبل " - ")
