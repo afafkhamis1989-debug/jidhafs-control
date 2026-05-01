@@ -155,13 +155,124 @@ def login_screen():
     if st.session_state.logged_in:
         return True
 
-    st.markdown("<h2 style='text-align:center;'>🔐 تسجيل الدخول</h2>", unsafe_allow_html=True)
-    st.markdown(
-        f"<div style='text-align:center; color:gray; font-size:13px; margin-bottom:10px;'>"
-        f"تم التحديث   بتاريخ {today}"
-        f"</div>",
-        unsafe_allow_html=True
-    )
+    st.markdown(f"""
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+    <style>
+    :root {{
+        --primary: #0d3060;
+        --primary-light: #1a4f8a;
+        --accent: #c8a035;
+        --border: #d6e4f7;
+        --text-main: #1a2a45;
+        --text-muted: #5a7092;
+        --radius: 16px;
+        --radius-sm: 10px;
+    }}
+    html, body, [class*="css"] {{
+        direction: rtl !important;
+        text-align: right !important;
+        font-family: 'Cairo', 'Tajawal', sans-serif !important;
+        background: linear-gradient(135deg, #e8f0fb 0%, #f4f7fc 60%, #eef3fb 100%) !important;
+    }}
+    .block-container {{
+        max-width: 480px !important;
+        margin: auto !important;
+        padding-top: 3rem !important;
+    }}
+    .login-card {{
+        background: #ffffff;
+        border-radius: var(--radius);
+        padding: 40px 36px 28px;
+        box-shadow: 0 8px 32px rgba(13,48,96,0.14);
+        border: 1px solid var(--border);
+        margin-bottom: 20px;
+        text-align: center;
+    }}
+    .login-logo-ring {{
+        width: 78px; height: 78px;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        margin: 0 auto 18px auto;
+        font-size: 32px;
+        box-shadow: 0 6px 20px rgba(13,48,96,0.25);
+    }}
+    .login-title {{
+        font-family: 'Cairo', sans-serif;
+        font-size: 22px;
+        font-weight: 900;
+        color: var(--primary);
+        margin: 0 0 4px 0;
+    }}
+    .login-subtitle {{
+        font-size: 13px;
+        color: var(--text-muted);
+        font-weight: 500;
+        margin-bottom: 12px;
+    }}
+    .login-date-badge {{
+        display: inline-block;
+        background: linear-gradient(135deg, #eaf3ff, #f4f9ff);
+        border: 1px solid var(--border);
+        color: var(--primary);
+        font-size: 12px;
+        font-weight: 700;
+        padding: 4px 14px;
+        border-radius: 20px;
+        margin-bottom: 4px;
+    }}
+    label {{
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 14px !important;
+        font-weight: 700 !important;
+        color: var(--text-main) !important;
+    }}
+    .stTextInput > div > div > input {{
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 15px !important;
+        border: 1.5px solid var(--border) !important;
+        border-radius: var(--radius-sm) !important;
+        padding: 10px 14px !important;
+        direction: rtl !important;
+    }}
+    .stButton > button {{
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 16px !important;
+        font-weight: 800 !important;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%) !important;
+        color: #fff !important;
+        border: none !important;
+        border-radius: var(--radius-sm) !important;
+        padding: 12px 28px !important;
+        width: 100% !important;
+        box-shadow: 0 4px 16px rgba(13,48,96,0.28) !important;
+        transition: all 0.22s !important;
+    }}
+    .stButton > button:hover {{
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 24px rgba(13,48,96,0.36) !important;
+    }}
+    .stRadio > div {{
+        direction: rtl !important;
+        background: #f4f8ff !important;
+        border-radius: var(--radius-sm) !important;
+        padding: 8px !important;
+        border: 1px solid var(--border) !important;
+    }}
+    [data-testid="stAlert"] {{
+        border-radius: var(--radius-sm) !important;
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+    }}
+    </style>
+    <div class="login-card">
+        <div class="login-logo-ring">🏫</div>
+        <div class="login-title">مركز التصحيح المركزي</div>
+        <div class="login-subtitle">مدرسة جدحفص الثانوية للبنات</div>
+        <div class="login-date-badge">📅 {today}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
     role = st.radio("نوع الدخول", ["مستخدم", "أدمن"], horizontal=True)
 
@@ -1166,7 +1277,7 @@ def recompute_total_points_dataframe(df):
 
 
 # =========================
-# تصميم الواجهة
+# تصميم الواجهة الاحترافي
 # =========================
 def apply_ui_style():
     logo_base64 = get_logo_base64()
@@ -1175,80 +1286,488 @@ def apply_ui_style():
         logo_html = f'<img src="data:image/png;base64,{logo_base64}" class="logo-img">'
 
     st.markdown(f"""
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+
     <style>
-    .block-container {{
-        max-width: 1250px;
-        margin: auto;
-        padding-top: 2rem;
+    /* ===== المتغيرات الأساسية ===== */
+    :root {{
+        --primary:       #0d3060;
+        --primary-light: #1a4f8a;
+        --accent:        #c8a035;
+        --accent-light:  #e8c060;
+        --surface:       #f4f7fc;
+        --surface-card:  #ffffff;
+        --border:        #d6e4f7;
+        --text-main:     #1a2a45;
+        --text-muted:    #5a7092;
+        --success:       #1e8c5a;
+        --warning:       #c47a1a;
+        --danger:        #c0392b;
+        --info:          #1565a0;
+        --shadow-sm:     0 2px 8px rgba(13,48,96,0.08);
+        --shadow-md:     0 6px 24px rgba(13,48,96,0.12);
+        --shadow-lg:     0 12px 40px rgba(13,48,96,0.18);
+        --radius:        14px;
+        --radius-sm:     8px;
     }}
 
-    .jidhafs-title {{
-        max-width: 1100px;
-        margin: 25px auto 30px auto;
-        padding: 30px 25px 40px 25px;
-        background-color:#eaf6ff;
-        border-radius:12px;
-        text-align:center;
-    }}
-
-    .logo-img {{
-        height: 90px;
-        width: auto;
-        margin-bottom: 15px;
-    }}
-
-    .jidhafs-title h1 {{
-        color:#15396b;
-        margin:0;
-        font-size:36px;
-        line-height:1.5;
-        font-weight:800;
-    }}
-
+    /* ===== القاعدة ===== */
     html, body, [class*="css"] {{
         direction: rtl;
         text-align: right;
-        font-size: 19px !important;
+        font-family: 'Cairo', 'Tajawal', sans-serif !important;
+        font-size: 16px !important;
+        color: var(--text-main);
+        background-color: var(--surface) !important;
     }}
 
-    button[data-baseweb="tab"] {{
-        direction: rtl;
-        text-align: right;
-        font-size: 19px !important;
+    /* ===== الحاوية الرئيسية ===== */
+    .block-container {{
+        max-width: 1300px !important;
+        margin: auto;
+        padding: 0 2rem 4rem 2rem !important;
+        background: var(--surface);
     }}
 
-    label, .stTextInput, .stNumberInput, .stFileUploader {{
-        font-size: 19px !important;
-        text-align: right;
+    /* ===== شريط العنوان الرئيسي ===== */
+    .hero-banner {{
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 55%, #1e6abf 100%);
+        border-radius: 0 0 var(--radius) var(--radius);
+        padding: 36px 40px 32px;
+        margin: -1rem -2rem 2rem -2rem;
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        position: relative;
+        overflow: hidden;
+        box-shadow: var(--shadow-lg);
     }}
 
-    .stButton button {{
-        font-size: 19px !important;
-        padding: 10px 20px;
+    .hero-banner::before {{
+        content: '';
+        position: absolute;
+        top: -60px; left: -60px;
+        width: 260px; height: 260px;
+        background: rgba(200,160,53,0.12);
+        border-radius: 50%;
+        pointer-events: none;
     }}
 
-    [data-testid="stMarkdownContainer"] h3 {{
-        text-align: center !important;
+    .hero-banner::after {{
+        content: '';
+        position: absolute;
+        bottom: -80px; right: -40px;
+        width: 320px; height: 320px;
+        background: rgba(255,255,255,0.04);
+        border-radius: 50%;
+        pointer-events: none;
     }}
 
-    .signature {{
-        position: fixed;
-        bottom: 20px;
-        left: 20px;
-        font-weight: bold;
+    .logo-img {{
+        height: 80px;
+        width: auto;
+        filter: drop-shadow(0 2px 8px rgba(0,0,0,0.25));
+        flex-shrink: 0;
+    }}
+
+    .hero-text {{
+        flex: 1;
+        position: relative;
+        z-index: 2;
+    }}
+
+    .hero-text h1 {{
+        color: #ffffff;
+        font-family: 'Cairo', sans-serif;
+        font-size: 28px;
+        font-weight: 900;
+        margin: 0 0 6px 0;
+        line-height: 1.4;
+        letter-spacing: -0.3px;
+        text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }}
+
+    .hero-subtitle {{
+        color: var(--accent-light);
         font-size: 14px;
-        z-index: 9999;
-        background: rgba(255,255,255,0.8);
-        padding: 4px 8px;
-        border-radius: 8px;
+        font-weight: 500;
+        letter-spacing: 0.5px;
+        opacity: 0.9;
     }}
+
+    .hero-badge {{
+        background: rgba(200,160,53,0.2);
+        border: 1px solid rgba(200,160,53,0.4);
+        color: var(--accent-light);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 12px;
+        border-radius: 20px;
+        display: inline-block;
+        margin-top: 8px;
+    }}
+
+    /* ===== شريط معلومات المستخدم ===== */
+    .user-info-bar {{
+        background: var(--surface-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 10px 18px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--primary);
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 1rem;
+    }}
+
+    /* ===== الأزرار ===== */
+    .stButton > button {{
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 15px !important;
+        font-weight: 700 !important;
+        padding: 10px 24px !important;
+        border-radius: var(--radius-sm) !important;
+        transition: all 0.22s ease !important;
+        border: none !important;
+        letter-spacing: 0.2px;
+    }}
+
+    .stButton > button[kind="primary"] {{
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%) !important;
+        color: #fff !important;
+        box-shadow: 0 4px 14px rgba(13,48,96,0.28) !important;
+    }}
+
+    .stButton > button[kind="primary"]:hover {{
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 22px rgba(13,48,96,0.36) !important;
+    }}
+
+    .stButton > button:not([kind="primary"]) {{
+        background: var(--surface-card) !important;
+        color: var(--primary) !important;
+        border: 1.5px solid var(--border) !important;
+        box-shadow: var(--shadow-sm) !important;
+    }}
+
+    .stButton > button:not([kind="primary"]):hover {{
+        background: var(--surface) !important;
+        border-color: var(--primary) !important;
+        transform: translateY(-1px) !important;
+    }}
+
+    /* ===== التبويبات ===== */
+    .stTabs [data-baseweb="tab-list"] {{
+        background: var(--surface-card);
+        border-radius: var(--radius-sm);
+        padding: 6px;
+        gap: 6px;
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 1.5rem;
+    }}
+
+    .stTabs [data-baseweb="tab"] {{
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 15px !important;
+        font-weight: 700 !important;
+        color: var(--text-muted) !important;
+        border-radius: var(--radius-sm) !important;
+        padding: 10px 22px !important;
+        transition: all 0.2s ease !important;
+        background: transparent !important;
+    }}
+
+    .stTabs [aria-selected="true"] {{
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%) !important;
+        color: #ffffff !important;
+        box-shadow: 0 4px 12px rgba(13,48,96,0.25) !important;
+    }}
+
+    /* ===== حقول الإدخال ===== */
+    .stTextInput > div > div > input,
+    .stNumberInput > div > div > input {{
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 15px !important;
+        border: 1.5px solid var(--border) !important;
+        border-radius: var(--radius-sm) !important;
+        padding: 10px 14px !important;
+        background: var(--surface-card) !important;
+        color: var(--text-main) !important;
+        transition: border-color 0.2s !important;
+        direction: rtl !important;
+    }}
+
+    .stTextInput > div > div > input:focus,
+    .stNumberInput > div > div > input:focus {{
+        border-color: var(--primary) !important;
+        box-shadow: 0 0 0 3px rgba(13,48,96,0.1) !important;
+    }}
+
+    /* ===== القوائم المنسدلة ===== */
+    .stSelectbox > div > div,
+    .stMultiSelect > div > div {{
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 15px !important;
+        border: 1.5px solid var(--border) !important;
+        border-radius: var(--radius-sm) !important;
+        background: var(--surface-card) !important;
+    }}
+
+    /* ===== رفع الملفات ===== */
+    .stFileUploader > div {{
+        border: 2px dashed var(--border) !important;
+        border-radius: var(--radius) !important;
+        background: linear-gradient(135deg, #f0f6ff 0%, #f8fbff 100%) !important;
+        padding: 24px !important;
+        text-align: center !important;
+        transition: all 0.25s ease !important;
+    }}
+
+    .stFileUploader > div:hover {{
+        border-color: var(--primary) !important;
+        background: linear-gradient(135deg, #e8f2ff 0%, #f4f9ff 100%) !important;
+        box-shadow: var(--shadow-sm) !important;
+    }}
+
+    .stFileUploader label {{
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 15px !important;
+        font-weight: 600 !important;
+        color: var(--primary) !important;
+    }}
+
+    /* ===== رسائل التنبيه ===== */
+    .stSuccess, .stInfo, .stWarning, .stError {{
+        border-radius: var(--radius-sm) !important;
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        border: none !important;
+        padding: 12px 18px !important;
+        box-shadow: var(--shadow-sm) !important;
+    }}
+
+    [data-testid="stNotification"] {{
+        border-radius: var(--radius-sm) !important;
+        font-family: 'Cairo', sans-serif !important;
+        font-weight: 600 !important;
+    }}
+
+    div[data-testid="stSuccess"] {{
+        background: linear-gradient(135deg, #e8f8f0 0%, #f0faf5 100%) !important;
+        border-right: 4px solid var(--success) !important;
+        color: #0f5235 !important;
+    }}
+
+    div[data-testid="stInfo"] {{
+        background: linear-gradient(135deg, #e8f2ff 0%, #f0f7ff 100%) !important;
+        border-right: 4px solid var(--info) !important;
+        color: #0d3060 !important;
+    }}
+
+    div[data-testid="stWarning"] {{
+        background: linear-gradient(135deg, #fff8e8 0%, #fffcf0 100%) !important;
+        border-right: 4px solid var(--warning) !important;
+        color: #7a4a0a !important;
+    }}
+
+    div[data-testid="stError"] {{
+        background: linear-gradient(135deg, #ffeaea 0%, #fff5f5 100%) !important;
+        border-right: 4px solid var(--danger) !important;
+        color: #7a1a1a !important;
+    }}
+
+    /* ===== الـ Dataframe ===== */
+    .stDataFrame {{
+        border-radius: var(--radius-sm) !important;
+        overflow: hidden !important;
+        box-shadow: var(--shadow-sm) !important;
+        border: 1px solid var(--border) !important;
+    }}
+
+    /* ===== الـ Expander ===== */
+    .streamlit-expanderHeader {{
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 15px !important;
+        font-weight: 700 !important;
+        color: var(--primary) !important;
+        background: var(--surface-card) !important;
+        border-radius: var(--radius-sm) !important;
+        padding: 12px 18px !important;
+        border: 1px solid var(--border) !important;
+        transition: all 0.2s !important;
+    }}
+
+    .streamlit-expanderHeader:hover {{
+        background: var(--surface) !important;
+        border-color: var(--primary) !important;
+    }}
+
+    .streamlit-expanderContent {{
+        border: 1px solid var(--border) !important;
+        border-top: none !important;
+        border-radius: 0 0 var(--radius-sm) var(--radius-sm) !important;
+        padding: 16px !important;
+        background: var(--surface-card) !important;
+    }}
+
+    /* ===== Checkbox & Radio ===== */
+    .stCheckbox label,
+    .stRadio label {{
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 15px !important;
+        font-weight: 600 !important;
+        color: var(--text-main) !important;
+    }}
+
+    /* ===== العناوين الفرعية ===== */
+    [data-testid="stMarkdownContainer"] h3 {{
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 20px !important;
+        font-weight: 800 !important;
+        color: var(--primary) !important;
+        text-align: center !important;
+        padding: 14px 20px !important;
+        background: linear-gradient(135deg, #eaf3ff 0%, #f4f8ff 100%);
+        border-radius: var(--radius-sm);
+        border-right: 5px solid var(--accent);
+        margin: 20px 0 16px 0 !important;
+        box-shadow: var(--shadow-sm);
+    }}
+
+    [data-testid="stMarkdownContainer"] h4 {{
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 17px !important;
+        font-weight: 700 !important;
+        color: var(--primary) !important;
+    }}
+
+    /* ===== الـ Container / Border ===== */
+    [data-testid="stVerticalBlockBorderWrapper"] > div {{
+        border-radius: var(--radius) !important;
+        border: 1px solid var(--border) !important;
+        padding: 18px 20px !important;
+        background: var(--surface-card) !important;
+        box-shadow: var(--shadow-sm) !important;
+        margin-bottom: 12px !important;
+        transition: box-shadow 0.2s !important;
+    }}
+
+    [data-testid="stVerticalBlockBorderWrapper"] > div:hover {{
+        box-shadow: var(--shadow-md) !important;
+    }}
+
+    /* ===== تقسيم ===== */
+    hr {{
+        border: none !important;
+        border-top: 2px solid var(--border) !important;
+        margin: 28px 0 !important;
+        opacity: 0.6 !important;
+    }}
+
+    /* ===== Metrics ===== */
+    [data-testid="metric-container"] {{
+        background: var(--surface-card) !important;
+        border-radius: var(--radius-sm) !important;
+        border: 1px solid var(--border) !important;
+        padding: 16px !important;
+        box-shadow: var(--shadow-sm) !important;
+        text-align: center !important;
+        transition: transform 0.2s, box-shadow 0.2s !important;
+    }}
+
+    [data-testid="metric-container"]:hover {{
+        transform: translateY(-2px) !important;
+        box-shadow: var(--shadow-md) !important;
+    }}
+
+    [data-testid="metric-container"] [data-testid="stMetricLabel"] {{
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 13px !important;
+        font-weight: 700 !important;
+        color: var(--text-muted) !important;
+    }}
+
+    [data-testid="metric-container"] [data-testid="stMetricValue"] {{
+        font-family: 'Tajawal', sans-serif !important;
+        font-size: 28px !important;
+        font-weight: 800 !important;
+        color: var(--primary) !important;
+    }}
+
+    /* ===== Labels عامة ===== */
+    label {{
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 15px !important;
+        font-weight: 700 !important;
+        color: var(--text-main) !important;
+    }}
+
+    /* ===== الـ Spinner ===== */
+    .stSpinner {{
+        text-align: center;
+        color: var(--primary) !important;
+    }}
+
+    /* ===== الـ Download Button ===== */
+    .stDownloadButton > button {{
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 14px !important;
+        font-weight: 700 !important;
+        background: linear-gradient(135deg, var(--accent) 0%, #d4a830 100%) !important;
+        color: var(--primary) !important;
+        border: none !important;
+        border-radius: var(--radius-sm) !important;
+        padding: 10px 22px !important;
+        box-shadow: 0 4px 14px rgba(200,160,53,0.3) !important;
+        transition: all 0.22s ease !important;
+    }}
+
+    .stDownloadButton > button:hover {{
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 22px rgba(200,160,53,0.4) !important;
+    }}
+
+    /* ===== الـ Info Badge (اسم المستخدم) ===== */
+    [data-testid="stAlert"] {{
+        border-radius: var(--radius-sm) !important;
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+    }}
+
+    /* ===== الـ Caption ===== */
+    .stCaption, small {{
+        font-family: 'Cairo', sans-serif !important;
+        font-size: 12px !important;
+        color: var(--text-muted) !important;
+    }}
+
+    /* ===== Sidebar (if any) ===== */
+    .css-1d391kg {{
+        background: var(--primary) !important;
+    }}
+
+    /* ===== تمييز الصفحة للـ RTL ===== */
+    .stApp {{
+        direction: rtl;
+    }}
+
     </style>
 
-    <div class="jidhafs-title">
+    <!-- ===== Hero Banner ===== -->
+    <div class="hero-banner">
         {logo_html}
-        <h1>مركز التصحيح المركزي بمدرسة جدحفص الثانوية للبنات</h1>
+        <div class="hero-text">
+            <h1>مركز التصحيح المركزي</h1>
+            <div class="hero-subtitle">مدرسة جدحفص الثانوية للبنات</div>
+            <div class="hero-badge">📅 {today}</div>
+        </div>
     </div>
-
     """, unsafe_allow_html=True)
 
 
@@ -1990,48 +2509,69 @@ if tab3 is not None:
 # =========================
 st.markdown(f"""
 <style>
-.footer-container {{
+.footer-pro {{
     margin-top: 80px;
-    padding: 18px 10px;
-    border-top: 1px solid #d9d9d9;
+    padding: 22px 32px;
+    background: linear-gradient(135deg, #0d3060 0%, #1a4f8a 100%);
+    border-radius: 14px;
     display: flex;
     justify-content: space-between;
-    gap: 20px;
-    font-weight: bold;
-    font-size: 14px;
-    color: #333;
+    align-items: center;
+    gap: 16px;
     direction: rtl;
+    box-shadow: 0 4px 20px rgba(13,48,96,0.2);
 }}
-.footer-right {{
-    text-align: right;
-    flex: 1;
-}}
-.footer-center {{
+.footer-pro .fp-item {{
     text-align: center;
     flex: 1;
 }}
-.footer-left {{
-    text-align: left;
-    flex: 1;
+.footer-pro .fp-role {{
+    color: rgba(255,255,255,0.6);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}}
+.footer-pro .fp-name {{
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+}}
+.footer-pro .fp-divider {{
+    width: 1px;
+    height: 36px;
+    background: rgba(255,255,255,0.2);
+    flex-shrink: 0;
+}}
+.footer-pro .fp-gold {{
+    color: #e8c060;
 }}
 @media (max-width: 700px) {{
-    .footer-container {{
-        display: block;
+    .footer-pro {{
+        flex-direction: column;
         text-align: center;
     }}
-    .footer-right, .footer-center, .footer-left {{
-        text-align: center;
-        margin: 6px 0;
-    }}
+    .footer-pro .fp-divider {{ display: none; }}
 }}
 </style>
 
-<div class="footer-container">
-    <div class="footer-right">تصميم وبرمجة: أ. عفاف حسين</div>
-    <div class="footer-center">إشراف: أ. أمينة الصائغ</div>
-    <div class="footer-left">رئيسة المركز: أ. خلود يعقوب بدر</div>
+<div class="footer-pro">
+    <div class="fp-item">
+        <div class="fp-role">تصميم وبرمجة</div>
+        <div class="fp-name fp-gold">أ. عفاف حسين</div>
+    </div>
+    <div class="fp-divider"></div>
+    <div class="fp-item">
+        <div class="fp-role">إشراف</div>
+        <div class="fp-name">أ. أمينة الصائغ</div>
+    </div>
+    <div class="fp-divider"></div>
+    <div class="fp-item">
+        <div class="fp-role">رئيسة المركز</div>
+        <div class="fp-name fp-gold">أ. خلود يعقوب بدر</div>
+    </div>
 </div>
-
 
 """, unsafe_allow_html=True)
 
