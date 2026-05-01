@@ -589,31 +589,38 @@ def format_excel_file(
 
     add_score_validation(ws, max_scores)
 
-    # تلوين خلايا الدرجات الفارغة بالأحمر الفاتح — تختفي لما تُكتب الدرجة
-    empty_fill  = PatternFill("solid", fgColor="FFCCCC")   # أحمر فاتح = فارغة
-    if not merge_mode and max_scores:
-        from openpyxl.formatting.rule import CellIsRule, FormulaRule
+    # تلوين خلايا الدرجات الفارغة بالأحمر الفاتح — يعمل حتى لو max_scores فاضي
+    if not merge_mode:
+        from openpyxl.formatting.rule import FormulaRule
         from openpyxl.styles import PatternFill as PF
+
+        empty_fill = PF("solid", fgColor="FFCCCC")  # أحمر فاتح = فارغة
+        filled_fill = PF("solid", fgColor="CCFFCC") # أخضر = مكتملة
+
         for col in ws.columns:
             col_letter = col[0].column_letter
             header = clean_header(col[0].value)
             original_header = header.split(" / الدرجة من ")[0].strip()
-            if original_header in max_scores and not ws.column_dimensions[col_letter].hidden:
+
+            # نطبق الشرط على أعمدة الدرجات الظاهرة فقط
+            if is_points_column(original_header) and not ws.column_dimensions[col_letter].hidden:
                 cell_range = f"{col_letter}2:{col_letter}{ws.max_row}"
-                # أحمر لما الخلية فارغة
+
+                # أحمر إذا الخلية فارغة فعليًا
                 ws.conditional_formatting.add(
                     cell_range,
                     FormulaRule(
-                        formula=[f'AND(ISBLANK({col_letter}2),{ws.max_row}>1)'],
-                        fill=PF("solid", fgColor="FFCCCC"),
+                        formula=[f'ISBLANK({col_letter}2)'],
+                        fill=empty_fill,
                     )
                 )
-                # يرجع للأخضر لما تُكتب قيمة
+
+                # أخضر إذا الخلية فيها أي قيمة
                 ws.conditional_formatting.add(
                     cell_range,
                     FormulaRule(
                         formula=[f'NOT(ISBLANK({col_letter}2))'],
-                        fill=PF("solid", fgColor="CCFFCC"),
+                        fill=filled_fill,
                     )
                 )
 
