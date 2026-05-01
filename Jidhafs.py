@@ -531,8 +531,12 @@ def format_excel_file(
             elif original_header in max_scores:
                 points_cols_for_total.append(col_letter)
 
-                for cell in col:
-                    cell.fill = points_fill
+                # الهيدر يبقى أخضر، وخلايا الدرجات تعتمد على التلوين الشرطي
+                # حتى تتحول للأحمر مباشرة عند حذف الدرجة
+                col[0].fill = points_fill
+                no_fill = PatternFill(fill_type=None)
+                for cell in col[1:]:
+                    cell.fill = no_fill
 
                 if lock_sheet:
                     for cell in col[1:]:
@@ -589,37 +593,39 @@ def format_excel_file(
 
     add_score_validation(ws, max_scores)
 
-    # تلوين خلايا الدرجات الفارغة بالأحمر الفاتح — يعمل حتى لو max_scores فاضي
+    # تلوين خلايا الدرجات الفارغة بالأحمر الفاتح
+    # لا نعتمد على ISBLANK فقط، لأن بعض ملفات Excel تحفظ الخلية كفراغ نصي "".
+    # لذلك نستخدم LEN(TRIM(cell&""))=0 حتى تعمل عند حذف الدرجة أو تركها فارغة.
     if not merge_mode:
         from openpyxl.formatting.rule import FormulaRule
         from openpyxl.styles import PatternFill as PF
 
-        empty_fill = PF("solid", fgColor="FFCCCC")  # أحمر فاتح = فارغة
-        filled_fill = PF("solid", fgColor="CCFFCC") # أخضر = مكتملة
+        empty_fill = PF("solid", fgColor="FFCCCC")   # أحمر فاتح = فارغة
+        filled_fill = PF("solid", fgColor="CCFFCC")  # أخضر = مكتملة
 
         for col in ws.columns:
             col_letter = col[0].column_letter
             header = clean_header(col[0].value)
             original_header = header.split(" / الدرجة من ")[0].strip()
 
-            # نطبق الشرط على أعمدة الدرجات الظاهرة فقط
             if is_points_column(original_header) and not ws.column_dimensions[col_letter].hidden:
                 cell_range = f"{col_letter}2:{col_letter}{ws.max_row}"
 
-                # أحمر إذا الخلية فارغة فعليًا
+                # أحمر إذا الخلية فارغة أو فيها مسافات فقط
                 ws.conditional_formatting.add(
                     cell_range,
                     FormulaRule(
-                        formula=[f'ISBLANK({col_letter}2)'],
+                        formula=[f'LEN(TRIM({col_letter}2&""))=0'],
                         fill=empty_fill,
+                        stopIfTrue=True,
                     )
                 )
 
-                # أخضر إذا الخلية فيها أي قيمة
+                # أخضر إذا فيها أي قيمة
                 ws.conditional_formatting.add(
                     cell_range,
                     FormulaRule(
-                        formula=[f'NOT(ISBLANK({col_letter}2))'],
+                        formula=[f'LEN(TRIM({col_letter}2&""))>0'],
                         fill=filled_fill,
                     )
                 )
