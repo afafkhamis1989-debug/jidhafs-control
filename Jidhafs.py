@@ -1062,53 +1062,52 @@ with tab1:
                     'roster': detect_roster_columns(df_roster),
                 }
 
-            # عرض الأعمدة المكتشفة
-            with st.expander("🔍 الأعمدة المكتشفة تلقائياً — راجعيها وعدّليها إذا لزم"):
+            detected_resp   = st.session_state[sig_key]['resp']
+            detected_roster = st.session_state[sig_key]['roster']
+
+            all_resp_cols   = ["— لا يوجد —"] + list(df.columns)
+            all_roster_cols = ["— لا يوجد —"] + list(df_roster.columns)
+
+            def _idx(lst, val):
+                return lst.index(val) if val in lst else 0
+
+            with st.expander("🔍 مراجعة الأعمدة المكتشفة (اضغطي للتعديل إذا لزم)", expanded=False):
                 col_r1, col_r2 = st.columns(2)
                 with col_r1:
                     st.markdown("**ملف الاستجابات:**")
-                    all_resp_cols = ["— لا يوجد —"] + list(df.columns)
-                    detected_resp = st.session_state[sig_key]['resp']
-
-                    def _idx_r(key):
-                        v = detected_resp.get(key)
-                        return all_resp_cols.index(v) if v in all_resp_cols else 0
-
-                    resp_email_sel    = st.selectbox("عمود الإيميل",           all_resp_cols, index=_idx_r('email'),      key="resp_email_col")
-                    resp_nameen_sel   = st.selectbox("عمود الاسم الإنجليزي",   all_resp_cols, index=_idx_r('name_en'),    key="resp_nameen_col")
-                    resp_namear_sel   = st.selectbox("عمود الاسم العربي",       all_resp_cols, index=_idx_r('name_ar'),    key="resp_namear_col")
-                    resp_id_sel       = st.selectbox("عمود الرقم الأكاديمي",   all_resp_cols, index=_idx_r('student_id'), key="resp_id_col")
-
+                    st.selectbox("عمود الإيميل",         all_resp_cols, index=_idx(all_resp_cols, detected_resp.get('email')),      key="resp_email_col")
+                    st.selectbox("عمود الاسم الإنجليزي", all_resp_cols, index=_idx(all_resp_cols, detected_resp.get('name_en')),    key="resp_nameen_col")
+                    st.selectbox("عمود الاسم العربي",     all_resp_cols, index=_idx(all_resp_cols, detected_resp.get('name_ar')),    key="resp_namear_col")
+                    st.selectbox("عمود الرقم الأكاديمي", all_resp_cols, index=_idx(all_resp_cols, detected_resp.get('student_id')), key="resp_id_col")
                 with col_r2:
                     st.markdown("**ملف المعنيات:**")
-                    all_roster_cols = ["— لا يوجد —"] + list(df_roster.columns)
-                    detected_roster = st.session_state[sig_key]['roster']
+                    st.selectbox("عمود الإيميل",         all_roster_cols, index=_idx(all_roster_cols, detected_roster.get('email')),      key="roster_email_col")
+                    st.selectbox("عمود الاسم الإنجليزي", all_roster_cols, index=_idx(all_roster_cols, detected_roster.get('name_en')),    key="roster_nameen_col")
+                    st.selectbox("عمود الاسم العربي",     all_roster_cols, index=_idx(all_roster_cols, detected_roster.get('name_ar')),    key="roster_namear_col")
+                    st.selectbox("عمود الرقم الأكاديمي", all_roster_cols, index=_idx(all_roster_cols, detected_roster.get('student_id')), key="roster_id_col")
+                    st.selectbox("عمود الشعبة (اختياري)", all_roster_cols, index=_idx(all_roster_cols, detected_roster.get('section')),   key="roster_section_col")
 
-                    def _idx_ro(key):
-                        v = detected_roster.get(key)
-                        return all_roster_cols.index(v) if v in all_roster_cols else 0
-
-                    roster_email_sel   = st.selectbox("عمود الإيميل",           all_roster_cols, index=_idx_ro('email'),      key="roster_email_col")
-                    roster_nameen_sel  = st.selectbox("عمود الاسم الإنجليزي",   all_roster_cols, index=_idx_ro('name_en'),    key="roster_nameen_col")
-                    roster_namear_sel  = st.selectbox("عمود الاسم العربي",       all_roster_cols, index=_idx_ro('name_ar'),    key="roster_namear_col")
-                    roster_id_sel      = st.selectbox("عمود الرقم الأكاديمي",   all_roster_cols, index=_idx_ro('student_id'), key="roster_id_col")
-                    roster_section_sel = st.selectbox("عمود الشعبة (اختياري)", all_roster_cols, index=_idx_ro('section'),    key="roster_section_col")
-
-            def _none(v): return None if v == "— لا يوجد —" else v
+            def _none(k, state_key):
+                v = st.session_state.get(state_key, "— لا يوجد —")
+                return None if (not v or v == "— لا يوجد —") else v
 
             resp_cols = {
-                'email':      _none(resp_email_sel),
-                'name_en':    _none(resp_nameen_sel),
-                'name_ar':    _none(resp_namear_sel),
-                'student_id': _none(resp_id_sel),
+                'email':      _none('email',      'resp_email_col'),
+                'name_en':    _none('name_en',    'resp_nameen_col'),
+                'name_ar':    _none('name_ar',    'resp_namear_col'),
+                'student_id': _none('student_id', 'resp_id_col'),
             }
             roster_cols = {
-                'email':      _none(roster_email_sel),
-                'name_en':    _none(roster_nameen_sel),
-                'name_ar':    _none(roster_namear_sel),
-                'student_id': _none(roster_id_sel),
-                'section':    _none(roster_section_sel),
+                'email':      _none('email',      'roster_email_col'),
+                'name_en':    _none('name_en',    'roster_nameen_col'),
+                'name_ar':    _none('name_ar',    'roster_namear_col'),
+                'student_id': _none('student_id', 'roster_id_col'),
+                'section':    _none('section',    'roster_section_col'),
             }
+
+            # إحصائية ملف المعنيات
+            roster_total = len(df_roster)
+            st.info(f"📋 عدد الطالبات في قائمة المعنيات: **{roster_total}** طالبة")
 
             if st.button("🔍 تشغيل فحص الحضور والمطابقة", type="primary"):
                 with st.spinner("جاري المطابقة..."):
