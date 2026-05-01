@@ -37,6 +37,40 @@ def get_version():
 # =========================
 st.set_page_config(page_title="مركز التصحيح المركزي", layout="wide")
 
+st.markdown("""
+<style>
+
+/* 🔥 تكبير عنوان السؤال */
+.question-title {
+    font-size: 26px !important;
+    font-weight: bold;
+    color: #1f3b73;
+}
+
+/* ✨ نص السؤال */
+.question-text {
+    font-size: 22px !important;
+    color: #444;
+}
+
+/* 💚 عمود Points */
+.points-text {
+    font-size: 24px !important;
+    color: #2e7d32;
+    font-weight: bold;
+}
+
+/* 📦 الكرت كامل */
+.question-box {
+    padding: 20px;
+    border-radius: 12px;
+    background-color: #f8f9fb;
+    margin-bottom: 20px;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
 APP_DATA_DIR = Path.home() / "Jidhafs_Control_Center_Data"
 APP_DATA_DIR.mkdir(exist_ok=True)
 
