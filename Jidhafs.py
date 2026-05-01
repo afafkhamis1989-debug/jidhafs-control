@@ -1285,15 +1285,26 @@ with tab1:
         if school_col:
             st.success(f"✅ تم اكتشاف عمود المدرسة في الملف: {school_col}")
         else:
-            st.warning("⚠️ لا يوجد عمود مدرسة في ملف الاستجابات. اختاري المدرسة صاحبة هذا الملف.")
-            selected_school = st.selectbox(
-                "اختاري المدرسة صاحبة ملف الاستجابات",
-                SCHOOL_OPTIONS,
-                key=f"school_select_{original_file_name}",
+            st.warning("⚠️ لا يوجد عمود مدرسة في ملف الاستجابات.")
+
+            skip_school = st.checkbox(
+                "⏭️ تخطي تحديد اسم المدرسة والانتقال للخطوة التالية",
+                key=f"skip_school_{original_file_name}",
+                help="استخدمي هذا الخيار إذا كان الامتحان لا يحتاج رصد المدرسة أو سيتم التعامل معها لاحقًا.",
             )
-            df["المدرسة"] = selected_school
-            school_col = "المدرسة"
-            st.info(f"تمت إضافة عمود المدرسة لكل الاستجابات: {selected_school} — وسيكون مخفيًا عن المصححات.")
+
+            if skip_school:
+                school_col = None
+                st.info("تم تخطي خطوة تحديد المدرسة بإقرار منك. لن يضيف البرنامج عمود المدرسة لهذا الملف.")
+            else:
+                selected_school = st.selectbox(
+                    "اختاري المدرسة صاحبة ملف الاستجابات",
+                    SCHOOL_OPTIONS,
+                    key=f"school_select_{original_file_name}",
+                )
+                df["المدرسة"] = selected_school
+                school_col = "المدرسة"
+                st.info(f"تمت إضافة عمود المدرسة لكل الاستجابات: {selected_school} — وسيكون مخفيًا عن المصححات.")
 
         st.success(f"✅ تم رفع ملف الاستجابات بنجاح — عدد الاستجابات: {len(df)}")
 
