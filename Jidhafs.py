@@ -69,6 +69,23 @@ def safe_filename(name):
     return name.strip() or "ملف"
 
 
+SCHOOL_OPTIONS = [
+    "مدرسة النور الثانوية للبنات",
+    "مدرسة المعرفة الثانوية للبنات",
+    "مدرسة الرفاع الغربي الثانوية للبنات",
+    "مدرسة جدحفص الثانوية للبنات",
+]
+
+
+def detect_school_column(df):
+    """يرجع اسم عمود المدرسة إذا كان موجودًا في الملف."""
+    for col in df.columns:
+        h = clean_header(col).lower()
+        if any(x in h for x in ["school", "المدرسة", "اسم المدرسة", "مدرسة"]):
+            return col
+    return None
+
+
 def arabic_day_name(dt):
     days = {
         "Saturday": "السبت",
@@ -260,6 +277,9 @@ hidden_headers = [
     "name",
     "grade posted time",
     "last modified time",
+    "school",
+    "المدرسة",
+    "اسم المدرسة",
     "الاسم الرباعي",
     "الرقم الأكاديمي",
     "الشعبة",
@@ -294,6 +314,7 @@ def should_auto_hide(header):
     hidden = [
         "id", "start time", "completion time", "email", "name",
         "grade posted time", "last modified time",
+        "school", "المدرسة", "اسم المدرسة",
     ]
     return (
         "feedback" in h
@@ -1155,6 +1176,23 @@ with tab1:
         df = pd.read_excel(uploaded_file, engine="openpyxl")
         original_file_name = uploaded_file.name
 
+        # =========================
+        # تحديد مدرسة الاستجابات
+        # =========================
+        school_col = detect_school_column(df)
+        if school_col:
+            st.success(f"✅ تم اكتشاف عمود المدرسة في الملف: {school_col}")
+        else:
+            st.warning("⚠️ لا يوجد عمود مدرسة في ملف الاستجابات. اختاري المدرسة صاحبة هذا الملف.")
+            selected_school = st.selectbox(
+                "اختاري المدرسة صاحبة ملف الاستجابات",
+                SCHOOL_OPTIONS,
+                key=f"school_select_{original_file_name}",
+            )
+            df["المدرسة"] = selected_school
+            school_col = "المدرسة"
+            st.info(f"تمت إضافة عمود المدرسة لكل الاستجابات: {selected_school} — وسيكون مخفيًا عن المصححات.")
+
         st.success(f"✅ تم رفع ملف الاستجابات بنجاح — عدد الاستجابات: {len(df)}")
 
         # =========================
@@ -1707,6 +1745,7 @@ with tab2:
             email_col   = _get_col(combined, ["email"])
             nameen_col  = _get_col(combined, ["^name$"]) or _get_col(combined, ["name"])
             namear_col  = _get_col(combined, ["الاسم الرباعي","اسم الطالبة","الاسم الثلاثي","الاسم الكامل","الاسم والرقم","بيانات الطالبة"])
+            school_col  = _get_col(combined, ["school", "المدرسة", "اسم المدرسة", "مدرسة"])
             total_col   = recalculated_total_col or _get_col(combined, ["total points"])
 
             # لو الاسم مدمج مع الرقم استخرج الاسم فقط (قبل " - ")
@@ -1720,7 +1759,7 @@ with tab2:
                 rdf["الإيميل"]        = combined[email_col].fillna("")  if email_col  else ""
                 rdf["الاسم الإنجليزي"]= combined[nameen_col].fillna("") if nameen_col else ""
                 rdf["الاسم العربي"]   = combined[namear_col].apply(_extract_name) if namear_col else ""
-                rdf["المدرسة"]        = "مدرسة جدحفص الثانوية للبنات"
+                rdf["المدرسة"]        = combined[school_col].fillna("") if school_col else ""
                 rdf["Total Points"]   = combined[total_col].fillna("")  if total_col  else ""
 
                 # تنسيق ملف الرصد
