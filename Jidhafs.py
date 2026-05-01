@@ -607,14 +607,14 @@ def format_excel_file(
     for row in ws.iter_rows():
         for cell in row:
             cell.alignment = Alignment(wrap_text=True, horizontal="center", vertical="center")
-            cell.font = Font(size=14)
+            cell.font = Font(size=18)
             cell.border = thin_border
             if lock_sheet:
                 cell.protection = Protection(locked=True)
 
     for cell in ws[1]:
         cell.fill = header_fill
-        cell.font = Font(size=16, bold=True)
+        cell.font = Font(size=22, bold=True)
 
     update_points_headers_with_max(ws, max_scores)
 
@@ -1111,7 +1111,7 @@ def highlight_unauthorized_excel(df_responses, unauthorized_indices, color="FF99
         is_highlighted = df_row_idx in highlighted_set
         for cell in row:
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            cell.font = Font(size=13)
+            cell.font = Font(size=16)
             if is_highlighted:
                 cell.fill = red_fill
 
