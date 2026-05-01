@@ -591,13 +591,15 @@ def format_excel_file(
 
     add_score_validation(ws, max_scores)
 
-    # تلوين خلايا الدرجات الفارغة بالأحمر الفاتح
-    # الخلايا تكون خضراء كتعبئة أساسية، وإذا صارت فاضية يتحول لونها للأحمر.
+    # تلوين خلايا الدرجات حسب الحالة:
+    # فارغة = أحمر، فيها درجة = أخضر
+    # هذا الجزء يضيف Conditional Formatting فعلي داخل ملف Excel.
     if not merge_mode:
         from openpyxl.formatting.rule import FormulaRule
         from openpyxl.styles import PatternFill as PF
 
-        empty_fill = PF("solid", fgColor="FFCCCC")   # أحمر فاتح = فارغة
+        red_fill_cf = PF(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
+        green_fill_cf = PF(start_color="CCFFCC", end_color="CCFFCC", fill_type="solid")
 
         for col in ws.columns:
             col_letter = col[0].column_letter
@@ -605,15 +607,38 @@ def format_excel_file(
             original_header = header.split(" / الدرجة من ")[0].strip()
 
             if is_points_column(original_header) and not ws.column_dimensions[col_letter].hidden:
-                cell_range = f"{col_letter}2:{col_letter}{ws.max_row}"
+                start_row = 2
+                end_row = ws.max_row
+                if end_row < start_row:
+                    continue
 
-                # أحمر إذا الخلية فارغة أو فيها مسافات فقط.
+                cell_range = f"{col_letter}{start_row}:{col_letter}{end_row}"
+
+                # لون مبدئي حسب القيم الحالية داخل الملف
+                for cell in ws[f"{col_letter}{start_row}:{col_letter}{end_row}"]:
+                    c = cell[0]
+                    if c.value is None or str(c.value).strip() == "":
+                        c.fill = red_fill_cf
+                    else:
+                        c.fill = green_fill_cf
+
+                # 🔴 إذا الخلية فاضية أو فيها مسافات فقط
+                # الصيغة نسبية: تبدأ من الصف 2، وExcel يطبقها على باقي الصفوف تلقائيًا.
                 ws.conditional_formatting.add(
                     cell_range,
                     FormulaRule(
-                        formula=[f'LEN(TRIM({col_letter}2&""))=0'],
-                        fill=empty_fill,
+                        formula=[f'LEN(TRIM({col_letter}{start_row}&""))=0'],
+                        fill=red_fill_cf,
                         stopIfTrue=True,
+                    )
+                )
+
+                # 🟢 إذا الخلية فيها قيمة
+                ws.conditional_formatting.add(
+                    cell_range,
+                    FormulaRule(
+                        formula=[f'LEN(TRIM({col_letter}{start_row}&""))>0'],
+                        fill=green_fill_cf,
                     )
                 )
 
