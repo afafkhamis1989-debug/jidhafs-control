@@ -617,8 +617,21 @@ def normalize_id(text):
 
 def normalize_email(text):
     """تنظيف الإيميل"""
-    if not text or pd.isna(text):
+    # إذا كان Series أو قيمة pandas، نحوله لـ scalar أولاً
+    try:
+        if hasattr(text, 'item'):
+            text = text.item()
+        elif hasattr(text, '__len__') and not isinstance(text, str):
+            text = str(text)
+    except Exception:
+        pass
+    if text is None:
         return ""
+    try:
+        if pd.isna(text):
+            return ""
+    except (TypeError, ValueError):
+        pass
     return str(text).strip().lower()
 
 
@@ -712,6 +725,19 @@ def detect_response_columns(df_responses):
     return cols
 
 
+def _row_val(row, col, default=''):
+    """استخراج قيمة من صف DataFrame بأمان"""
+    if not col:
+        return default
+    try:
+        val = row[col] if col in row.index else default
+        if pd.isna(val):
+            return default
+        return val
+    except Exception:
+        return default
+
+
 def match_student(response_row, roster_df, roster_cols, resp_cols):
     """
     تطابق صف استجابة واحد مع قائمة المعنيات.
@@ -722,38 +748,40 @@ def match_student(response_row, roster_df, roster_cols, resp_cols):
 
     # 1. مطابقة إيميل (الأقوى)
     if roster_cols['email'] and resp_cols['email']:
-        resp_email = normalize_email(response_row.get(resp_cols['email'], ''))
+        resp_email = normalize_email(_row_val(response_row, resp_cols['email']))
         if resp_email:
             for _, roster_row in roster_df.iterrows():
-                roster_email = normalize_email(roster_row.get(roster_cols['email'], ''))
+                roster_email = normalize_email(_row_val(roster_row, roster_cols['email']))
                 if resp_email == roster_email:
                     return True, 1.0, "إيميل"
 
     # 2. مطابقة رقم أكاديمي
     if roster_cols['student_id'] and resp_cols['student_id']:
-        resp_id = normalize_id(response_row.get(resp_cols['student_id'], ''))
+        resp_id = normalize_id(str(_row_val(response_row, resp_cols['student_id'])))
         if resp_id:
             for _, roster_row in roster_df.iterrows():
-                roster_id = normalize_id(roster_row.get(roster_cols['student_id'], ''))
+                roster_id = normalize_id(str(_row_val(roster_row, roster_cols['student_id'])))
                 if resp_id and roster_id and resp_id == roster_id:
                     return True, 0.98, "رقم أكاديمي"
 
     # 3. مطابقة اسم عربي
     if roster_cols['name_ar'] and resp_cols['name_ar']:
-        resp_name_ar = response_row.get(resp_cols['name_ar'], '')
-        if resp_name_ar and not pd.isna(resp_name_ar):
+        resp_name_ar = _row_val(response_row, resp_cols['name_ar'])
+        if resp_name_ar:
             for _, roster_row in roster_df.iterrows():
-                matched, score = fuzzy_name_match(resp_name_ar, roster_row.get(roster_cols['name_ar'], ''))
+                roster_name_ar = _row_val(roster_row, roster_cols['name_ar'])
+                matched, score = fuzzy_name_match(resp_name_ar, roster_name_ar)
                 if matched and score > best_score:
                     best_score = score
                     best_method = f"اسم عربي ({score:.0%})"
 
     # 4. مطابقة اسم إنجليزي
     if roster_cols['name_en'] and resp_cols['name_en']:
-        resp_name_en = response_row.get(resp_cols['name_en'], '')
-        if resp_name_en and not pd.isna(resp_name_en):
+        resp_name_en = _row_val(response_row, resp_cols['name_en'])
+        if resp_name_en:
             for _, roster_row in roster_df.iterrows():
-                matched, score = fuzzy_name_match(resp_name_en, roster_row.get(roster_cols['name_en'], ''))
+                roster_name_en = _row_val(roster_row, roster_cols['name_en'])
+                matched, score = fuzzy_name_match(resp_name_en, roster_name_en)
                 if matched and score > best_score:
                     best_score = score
                     best_method = f"اسم إنجليزي ({score:.0%})"
@@ -771,10 +799,10 @@ def run_attendance_check(df_responses, df_roster, resp_cols, roster_cols):
     results = []
     for idx, row in df_responses.iterrows():
         matched, score, method = match_student(row, df_roster, roster_cols, resp_cols)
-        email_val = row.get(resp_cols['email'], '') if resp_cols['email'] else ''
-        name_en_val = row.get(resp_cols['name_en'], '') if resp_cols['name_en'] else ''
-        name_ar_val = row.get(resp_cols['name_ar'], '') if resp_cols['name_ar'] else ''
-        id_val = row.get(resp_cols['student_id'], '') if resp_cols['student_id'] else ''
+        email_val = _row_val(row, resp_cols['email']) if resp_cols['email'] else ''
+        name_en_val = _row_val(row, resp_cols['name_en']) if resp_cols['name_en'] else ''
+        name_ar_val = _row_val(row, resp_cols['name_ar']) if resp_cols['name_ar'] else ''
+        id_val = _row_val(row, resp_cols['student_id']) if resp_cols['student_id'] else ''
         results.append({
             'row_index': idx,
             'email': email_val,
@@ -790,21 +818,25 @@ def run_attendance_check(df_responses, df_roster, resp_cols, roster_cols):
     absent = []
     roster_emails = set()
     if roster_cols['email']:
-        roster_emails = set(normalize_email(r) for _, r in df_roster.iterrows()
-                            if r.get(roster_cols['email']))
+        for _, r in df_roster.iterrows():
+            val = r[roster_cols['email']] if roster_cols['email'] in r.index else ''
+            e = normalize_email(val)
+            if e:
+                roster_emails.add(e)
 
     submitted_emails = set()
     if resp_cols['email']:
-        submitted_emails = set(
-            normalize_email(row.get(resp_cols['email'], ''))
-            for _, row in df_responses.iterrows()
-        )
+        for _, row in df_responses.iterrows():
+            val = row[resp_cols['email']] if resp_cols['email'] in row.index else ''
+            e = normalize_email(val)
+            if e:
+                submitted_emails.add(e)
 
     for _, roster_row in df_roster.iterrows():
-        r_email = normalize_email(roster_row.get(roster_cols['email'], '')) if roster_cols['email'] else ''
-        r_name_ar = roster_row.get(roster_cols['name_ar'], '') if roster_cols['name_ar'] else ''
-        r_name_en = roster_row.get(roster_cols['name_en'], '') if roster_cols['name_en'] else ''
-        r_id = roster_row.get(roster_cols['student_id'], '') if roster_cols['student_id'] else ''
+        r_email = normalize_email(_row_val(roster_row, roster_cols['email'])) if roster_cols['email'] else ''
+        r_name_ar = _row_val(roster_row, roster_cols['name_ar'])
+        r_name_en = _row_val(roster_row, roster_cols['name_en'])
+        r_id = _row_val(roster_row, roster_cols['student_id'])
 
         # تحقق بالإيميل أولاً
         if r_email and r_email in submitted_emails:
