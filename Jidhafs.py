@@ -738,150 +738,102 @@ def _row_val(row, col, default=''):
         return default
 
 
-def match_student(response_row, roster_df, roster_cols, resp_cols):
-    """
-    تطابق صف استجابة واحد مع قائمة المعنيات.
-    تُرجع (matched: bool, score: float, method: str)
-
-    منطق المطابقة:
-    - إذا كان الإيميل موجوداً في ملف الاستجابات وفي ملف المعنيات → نعتمد الإيميل حاسماً
-      * إيميل طابق → مصرح ✅
-      * إيميل ما طابق → غير مصرح ❌ (لا نكمل للاسم)
-    - إذا ما في إيميل في أحد الملفين → نطابق بالرقم الأكاديمي ثم الاسم
-    """
-    # 1. مطابقة إيميل — حاسمة إذا توفرت في الملفين
-    if roster_cols['email'] and resp_cols['email']:
-        resp_email = normalize_email(_row_val(response_row, resp_cols['email']))
-        if resp_email:
-            # تحقق هل في إيميلات في ملف المعنيات أصلاً
-            roster_has_emails = any(
-                normalize_email(_row_val(r, roster_cols['email']))
-                for _, r in roster_df.iterrows()
-            )
-            if roster_has_emails:
-                # الإيميل حاسم — إذا طابق نجاح، إذا ما طابق فشل فوري
-                for _, roster_row in roster_df.iterrows():
-                    roster_email = normalize_email(_row_val(roster_row, roster_cols['email']))
-                    if resp_email == roster_email:
-                        return True, 1.0, "إيميل"
-                # ما طابق أي إيميل → غير مصرح فوراً بدون تجاوز للاسم
-                return False, 0.0, "إيميل غير مصرح"
-
-    # 2. مطابقة رقم أكاديمي (إذا ما في إيميل)
-    if roster_cols['student_id'] and resp_cols['student_id']:
-        resp_id = normalize_id(str(_row_val(response_row, resp_cols['student_id'])))
-        if resp_id:
-            for _, roster_row in roster_df.iterrows():
-                roster_id = normalize_id(str(_row_val(roster_row, roster_cols['student_id'])))
-                if resp_id and roster_id and resp_id == roster_id:
-                    return True, 0.98, "رقم أكاديمي"
-
-    # 3. مطابقة اسم عربي (fallback)
-    best_score = 0.0
-    best_method = ""
-    if roster_cols['name_ar'] and resp_cols['name_ar']:
-        resp_name_ar = _row_val(response_row, resp_cols['name_ar'])
-        if resp_name_ar:
-            for _, roster_row in roster_df.iterrows():
-                roster_name_ar = _row_val(roster_row, roster_cols['name_ar'])
-                matched, score = fuzzy_name_match(resp_name_ar, roster_name_ar)
-                if matched and score > best_score:
-                    best_score = score
-                    best_method = f"اسم عربي ({score:.0%})"
-
-    # 4. مطابقة اسم إنجليزي (fallback)
-    if roster_cols['name_en'] and resp_cols['name_en']:
-        resp_name_en = _row_val(response_row, resp_cols['name_en'])
-        if resp_name_en:
-            for _, roster_row in roster_df.iterrows():
-                roster_name_en = _row_val(roster_row, roster_cols['name_en'])
-                matched, score = fuzzy_name_match(resp_name_en, roster_name_en)
-                if matched and score > best_score:
-                    best_score = score
-                    best_method = f"اسم إنجليزي ({score:.0%})"
-
-    if best_score >= 0.75:
-        return True, best_score, best_method
-
-    return False, best_score, "لا توجد مطابقة"
-
-
 def run_attendance_check(df_responses, df_roster, resp_cols, roster_cols):
     """
-    تشغيل فحص الحضور والغياب وإرجاع النتائج
+    فحص الحضور والغياب مع ثلاث حالات:
+    1. إيميل صحيح + اسم صحيح  → مصرح ✅
+    2. إيميل صحيح + اسم مختلف → مصرح لكن تحذير ⚠️ (name_mismatch)
+    3. إيميل غير موجود في المعنيات → غير مصرح ❌
     """
-    results = []
-    for idx, row in df_responses.iterrows():
-        matched, score, method = match_student(row, df_roster, roster_cols, resp_cols)
-        email_val = _row_val(row, resp_cols['email']) if resp_cols['email'] else ''
-        name_en_val = _row_val(row, resp_cols['name_en']) if resp_cols['name_en'] else ''
-        name_ar_val = _row_val(row, resp_cols['name_ar']) if resp_cols['name_ar'] else ''
-        id_val = _row_val(row, resp_cols['student_id']) if resp_cols['student_id'] else ''
-        results.append({
-            'row_index': idx,
-            'email': email_val,
-            'name_en': name_en_val,
-            'name_ar': name_ar_val,
-            'student_id': id_val,
-            'matched': matched,
-            'match_score': score,
-            'match_method': method,
-        })
-
-    # الطالبات الغائبات (في المعنيات لكن ما قدموا)
-    absent = []
-    roster_emails = set()
+    # بناء dict: إيميل → بيانات الطالبة من ملف المعنيات
+    roster_by_email = {}
     if roster_cols['email']:
         for _, r in df_roster.iterrows():
-            val = r[roster_cols['email']] if roster_cols['email'] in r.index else ''
-            e = normalize_email(val)
+            e = normalize_email(_row_val(r, roster_cols['email']))
             if e:
-                roster_emails.add(e)
+                roster_by_email[e] = r
 
-    submitted_emails = set()
+    # فحص كل استجابة
+    results = []
+    for idx, row in df_responses.iterrows():
+        email_val    = str(_row_val(row, resp_cols['email'])       if resp_cols['email']       else '').strip()
+        name_en_val  = str(_row_val(row, resp_cols['name_en'])     if resp_cols['name_en']     else '').strip()
+        name_ar_val  = str(_row_val(row, resp_cols['name_ar'])     if resp_cols['name_ar']     else '').strip()
+        id_val       = str(_row_val(row, resp_cols['student_id'])  if resp_cols['student_id']  else '').strip()
+
+        resp_email = normalize_email(email_val)
+        name_mismatch = False
+        expected_name = ''
+        method = ''
+
+        if roster_by_email:
+            if resp_email in roster_by_email:
+                matched = True
+                roster_entry = roster_by_email[resp_email]
+
+                # تحقق من الاسم الإنجليزي
+                if resp_cols['name_en'] and roster_cols['name_en']:
+                    roster_name_en = str(_row_val(roster_entry, roster_cols['name_en'])).strip()
+                    ok, _ = fuzzy_name_match(name_en_val, roster_name_en)
+                    if not ok and name_en_val and roster_name_en:
+                        name_mismatch = True
+                        expected_name = roster_name_en
+
+                # تحقق من الاسم العربي (إضافي)
+                if not name_mismatch and resp_cols['name_ar'] and roster_cols['name_ar']:
+                    roster_name_ar = str(_row_val(roster_entry, roster_cols['name_ar'])).strip()
+                    ok, _ = fuzzy_name_match(name_ar_val, roster_name_ar)
+                    if not ok and name_ar_val and roster_name_ar:
+                        name_mismatch = True
+                        expected_name = roster_name_ar
+
+                method = "إيميل ✅ — اسم مختلف ⚠️" if name_mismatch else "إيميل ✅"
+            else:
+                matched = False
+                method = "إيميل غير مصرح ❌"
+        else:
+            matched = True
+            method = "لا يوجد إيميلات للمقارنة"
+
+        results.append({
+            'row_index':     idx,
+            'email':         email_val,
+            'name_en':       name_en_val,
+            'name_ar':       name_ar_val,
+            'student_id':    id_val,
+            'matched':       matched,
+            'name_mismatch': name_mismatch,
+            'expected_name': expected_name,
+            'match_method':  method,
+        })
+
+    # الغائبات — في المعنيات لكن إيميلهم ما ظهر في الاستجابات
+    submitted_email_set = set()
     if resp_cols['email']:
         for _, row in df_responses.iterrows():
-            val = row[resp_cols['email']] if resp_cols['email'] in row.index else ''
-            e = normalize_email(val)
+            e = normalize_email(_row_val(row, resp_cols['email']))
             if e:
-                submitted_emails.add(e)
+                submitted_email_set.add(e)
 
+    absent = []
     for _, roster_row in df_roster.iterrows():
         r_email = normalize_email(_row_val(roster_row, roster_cols['email'])) if roster_cols['email'] else ''
-        r_name_ar = _row_val(roster_row, roster_cols['name_ar'])
-        r_name_en = _row_val(roster_row, roster_cols['name_en'])
-        r_id = _row_val(roster_row, roster_cols['student_id'])
-
-        # تحقق بالإيميل أولاً
-        if r_email and r_email in submitted_emails:
-            continue
-
-        # إذا ما في إيميل، تحقق بالاسم والرقم
-        found = False
-        for res in results:
-            if res['matched']:
-                if r_email and normalize_email(res['email']) == r_email:
-                    found = True
-                    break
-                if r_id and normalize_id(str(r_id)) == normalize_id(str(res['student_id'])):
-                    found = True
-                    break
-
-        if not found:
+        if r_email and r_email not in submitted_email_set:
             absent.append({
-                'الإيميل': r_email,
-                'الاسم العربي': r_name_ar,
-                'الاسم الإنجليزي': r_name_en,
-                'الرقم الأكاديمي': r_id,
-                'الشعبة': roster_row.get(roster_cols['section'], '') if roster_cols['section'] else '',
+                'الإيميل':        _row_val(roster_row, roster_cols['email'])       if roster_cols['email']       else '',
+                'الاسم العربي':   _row_val(roster_row, roster_cols['name_ar'])     if roster_cols['name_ar']     else '',
+                'الاسم الإنجليزي': _row_val(roster_row, roster_cols['name_en'])   if roster_cols['name_en']     else '',
+                'الرقم الأكاديمي': _row_val(roster_row, roster_cols['student_id']) if roster_cols['student_id'] else '',
+                'الشعبة':         _row_val(roster_row, roster_cols['section'])     if roster_cols['section']     else '',
             })
 
-    unauthorized = [r for r in results if not r['matched']]
-    return results, absent, unauthorized
+    unauthorized   = [r for r in results if not r['matched']]
+    name_mismatches = [r for r in results if r['matched'] and r['name_mismatch']]
+    return results, absent, unauthorized, name_mismatches
 
 
-def highlight_unauthorized_excel(df_responses, unauthorized_indices):
-    """إنشاء ملف Excel مع تلوين صفوف الغير مصرح لهم"""
+def highlight_unauthorized_excel(df_responses, unauthorized_indices, color="FF9999"):
+    """إنشاء ملف Excel مع تلوين صفوف محددة بلون قابل للتخصيص"""
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df_responses.to_excel(writer, index=False, sheet_name="الاستجابات")
@@ -890,8 +842,7 @@ def highlight_unauthorized_excel(df_responses, unauthorized_indices):
     wb = load_workbook(output)
     ws = wb.active
 
-    red_fill = PatternFill("solid", fgColor="FF9999")
-    yellow_fill = PatternFill("solid", fgColor="FFFF99")
+    red_fill = PatternFill("solid", fgColor=color)
 
     # رأس الجدول
     for cell in ws[1]:
@@ -899,15 +850,15 @@ def highlight_unauthorized_excel(df_responses, unauthorized_indices):
         cell.font = Font(bold=True, size=12)
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-    unauthorized_set = set(unauthorized_indices)
+    highlighted_set = set(unauthorized_indices)
 
     for row_num, row in enumerate(ws.iter_rows(min_row=2), start=2):
         df_row_idx = row_num - 2
-        is_unauthorized = df_row_idx in unauthorized_set
+        is_highlighted = df_row_idx in highlighted_set
         for cell in row:
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
             cell.font = Font(size=11)
-            if is_unauthorized:
+            if is_highlighted:
                 cell.fill = red_fill
 
     ws.freeze_panes = "A2"
@@ -1154,51 +1105,77 @@ with tab1:
 
             if st.button("🔍 تشغيل فحص الحضور والمطابقة", type="primary"):
                 with st.spinner("جاري المطابقة..."):
-                    results, absent_list, unauthorized_list = run_attendance_check(
+                    results, absent_list, unauthorized_list, name_mismatch_list = run_attendance_check(
                         df, df_roster, resp_cols, roster_cols
                     )
                     st.session_state["attendance_results"] = results
                     st.session_state["absent_list"] = absent_list
                     st.session_state["unauthorized_list"] = unauthorized_list
+                    st.session_state["name_mismatch_list"] = name_mismatch_list
                     st.session_state["attendance_done"] = True
 
             if st.session_state.get("attendance_done"):
                 results = st.session_state["attendance_results"]
                 absent_list = st.session_state["absent_list"]
                 unauthorized_list = st.session_state["unauthorized_list"]
+                name_mismatch_list = st.session_state.get("name_mismatch_list", [])
 
                 total = len(results)
                 matched_count = sum(1 for r in results if r['matched'])
                 unauth_count = len(unauthorized_list)
                 absent_count = len(absent_list)
+                mismatch_count = len(name_mismatch_list)
 
                 # ملخص
-                c1, c2, c3, c4 = st.columns(4)
+                c1, c2, c3, c4, c5 = st.columns(5)
                 c1.metric("📩 إجمالي الاستجابات", total)
-                c2.metric("✅ مطابقة ومصرح لهم", matched_count)
-                c3.metric("🚫 غير مصرح لهم", unauth_count)
-                c4.metric("❌ غائبات", absent_count)
+                c2.metric("✅ مصرح واسم صحيح", matched_count - mismatch_count)
+                c3.metric("⚠️ إيميل صح / اسم مختلف", mismatch_count)
+                c4.metric("🚫 غير مصرح لهم", unauth_count)
+                c5.metric("❌ غائبات", absent_count)
+
+                # --- إيميل صحيح لكن اسم مختلف ---
+                if name_mismatch_list:
+                    st.warning(f"⚠️ يوجد {mismatch_count} طالبة إيميلها صحيح لكن الاسم المكتوب لا يطابق قائمة المعنيات — راجعيها:")
+                    mismatch_df = pd.DataFrame([{
+                        "الإيميل": r['email'],
+                        "الاسم المكتوب في الاستجابة": r['name_en'] or r['name_ar'],
+                        "الاسم المتوقع من القائمة": r['expected_name'],
+                        "طريقة التحقق": r['match_method'],
+                    } for r in name_mismatch_list])
+                    st.dataframe(mismatch_df, use_container_width=True)
+
+                    mismatch_indices = [r['row_index'] for r in name_mismatch_list]
+                    mismatch_excel = highlight_unauthorized_excel(df, mismatch_indices, color="FFEB99")
+                    st.download_button(
+                        label="⬇️ تنزيل ملف الاستجابات مع تحديد الأسماء المختلفة (باللون الأصفر)",
+                        data=mismatch_excel,
+                        file_name=f"{safe_filename(Path(original_file_name).stem)}-أسماء-مختلفة.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="dl_mismatch",
+                    )
+                else:
+                    st.success("✅ جميع الأسماء متطابقة مع قائمة المعنيات.")
 
                 # --- غير مصرح لهم ---
                 if unauthorized_list:
-                    st.error(f"⚠️ تنبيه: يوجد {unauth_count} استجابة من طالبات غير مدرجات في قائمة المعنيات!")
+                    st.error(f"🚫 تنبيه: يوجد {unauth_count} استجابة من طالبات غير مدرجات في قائمة المعنيات!")
                     unauth_df = pd.DataFrame([{
                         "الإيميل": r['email'],
                         "الاسم الإنجليزي": r['name_en'],
                         "الاسم العربي": r['name_ar'],
                         "الرقم الأكاديمي": r['student_id'],
-                        "نسبة التطابق": f"{r['match_score']:.0%}",
                     } for r in unauthorized_list])
                     st.dataframe(unauth_df, use_container_width=True)
 
-                    # ملف ملون
                     unauthorized_indices = [r['row_index'] for r in unauthorized_list]
-                    colored_excel = highlight_unauthorized_excel(df, unauthorized_indices)
+                    colored_excel = highlight_unauthorized_excel(df, unauthorized_indices, color="FF9999")
                     st.download_button(
                         label="⬇️ تنزيل ملف الاستجابات مع تحديد الغير مصرح لهم (باللون الأحمر)",
                         data=colored_excel,
                         file_name=f"{safe_filename(Path(original_file_name).stem)}-مراجعة-المصرح-لهم.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="dl_unauth",
                     )
                 else:
                     st.success("✅ جميع من قدموا الامتحان مصرح لهم — لا يوجد إيميل غير مصرح له.")
@@ -1222,10 +1199,10 @@ with tab1:
                     st.success("✅ لا يوجد غياب — جميع الطالبات المعنيات قدّمن الامتحان.")
 
                 # هل نكمل للتقسيم؟
-                if unauth_count == 0 and absent_count == 0:
+                if unauth_count == 0 and absent_count == 0 and mismatch_count == 0:
                     st.success("🎉 المطابقة مكتملة بدون أي مشاكل. يمكنك الانتقال لخطوة التقسيم أدناه.")
                     attendance_passed = True
-                elif unauth_count > 0 or absent_count > 0:
+                else:
                     st.info("📌 راجعي النتائج أعلاه. يمكنك المتابعة للتقسيم عبر الزر أدناه.")
                     if st.checkbox("✅ راجعت النتائج وأريد المتابعة لخطوة التقسيم", key="confirm_proceed"):
                         attendance_passed = True
