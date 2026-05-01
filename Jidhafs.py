@@ -421,6 +421,9 @@ def format_excel_file(
     extra_hidden_columns=None,
     max_scores=None,
     excluded_columns=None,
+    corrector_name="",
+    auditor_name="",
+    school_name="مدرسة جدحفص الثانوية للبنات",
 ):
     if extra_hidden_columns is None:
         extra_hidden_columns = []
@@ -546,6 +549,66 @@ def format_excel_file(
                 ws[f"{total_col_letter}{row_num}"].protection = Protection(locked=True)
 
     add_score_validation(ws, max_scores)
+
+    # تلوين خلايا الدرجات الفارغة بالأحمر الفاتح — تختفي لما تُكتب الدرجة
+    empty_fill  = PatternFill("solid", fgColor="FFCCCC")   # أحمر فاتح = فارغة
+    if not merge_mode and max_scores:
+        from openpyxl.formatting.rule import CellIsRule, FormulaRule
+        from openpyxl.styles import PatternFill as PF
+        for col in ws.columns:
+            col_letter = col[0].column_letter
+            header = clean_header(col[0].value)
+            original_header = header.split(" / الدرجة من ")[0].strip()
+            if original_header in max_scores and not ws.column_dimensions[col_letter].hidden:
+                cell_range = f"{col_letter}2:{col_letter}{ws.max_row}"
+                # أحمر لما الخلية فارغة
+                ws.conditional_formatting.add(
+                    cell_range,
+                    FormulaRule(
+                        formula=[f'AND(ISBLANK({col_letter}2),{ws.max_row}>1)'],
+                        fill=PF("solid", fgColor="FFCCCC"),
+                    )
+                )
+                # يرجع للأخضر لما تُكتب قيمة
+                ws.conditional_formatting.add(
+                    cell_range,
+                    FormulaRule(
+                        formula=[f'NOT(ISBLANK({col_letter}2))'],
+                        fill=PF("solid", fgColor="CCFFCC"),
+                    )
+                )
+
+    # إضافة ورقة معلومات المصححة والمدققة للملفات المقسمة
+    if not merge_mode and (corrector_name or auditor_name):
+        if "معلومات" not in wb.sheetnames:
+            ws_info = wb.create_sheet("معلومات")
+            ws_info.sheet_view.rightToLeft = True
+            info_header_fill = PatternFill("solid", fgColor="15396B")
+            info_fill        = PatternFill("solid", fgColor="EAF6FF")
+            bold_white  = Font(bold=True, size=13, color="FFFFFF")
+            bold_blue   = Font(bold=True, size=13, color="15396B")
+            center_align = Alignment(horizontal="center", vertical="center")
+
+            rows_data = [
+                ("المدرسة",    school_name),
+                ("اسم المصححة", corrector_name),
+                ("اسم المدققة", auditor_name),
+            ]
+            for r_idx, (label, value) in enumerate(rows_data, start=2):
+                c_label = ws_info.cell(row=r_idx, column=2, value=label)
+                c_value = ws_info.cell(row=r_idx, column=3, value=value)
+                c_label.fill  = info_header_fill
+                c_label.font  = bold_white
+                c_label.alignment = center_align
+                c_value.fill  = info_fill
+                c_value.font  = bold_blue
+                c_value.alignment = center_align
+                ws_info.row_dimensions[r_idx].height = 32
+
+            ws_info.column_dimensions["B"].width = 22
+            ws_info.column_dimensions["C"].width = 35
+            ws_info.sheet_state = "visible"
+        wb.active = wb["Responses"] if "Responses" in wb.sheetnames else ws
 
     for row in ws.iter_rows():
         row_num = row[0].row
@@ -1440,6 +1503,14 @@ with tab1:
               else:
                   st.info("لا توجد درجات محددة حتى الآن.")
 
+          st.markdown("---")
+          st.markdown("### 👩‍🏫 معلومات المصححة والمدققة")
+          col_c1, col_c2 = st.columns(2)
+          with col_c1:
+              corrector_name = st.text_input("اسم المصححة", key="corrector_name", placeholder="مثال: أ. فاطمة علي")
+          with col_c2:
+              auditor_name = st.text_input("اسم المدققة", key="auditor_name", placeholder="مثال: أ. زينب أحمد")
+
           if st.button("✂️ تقسيم الاستجابات وتنزيل الملفات", disabled=not can_split):
               zip_buffer = BytesIO()
               part_names = []
@@ -1461,6 +1532,8 @@ with tab1:
                           extra_hidden_columns=extra_hidden_columns,
                           max_scores=max_scores,
                           excluded_columns=excluded_columns,
+                          corrector_name=corrector_name,
+                          auditor_name=auditor_name,
                       )
 
                       file_number = (i // chunk_size) + 1
@@ -1565,6 +1638,83 @@ with tab2:
                 file_name=merged_file_name,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
+
+            # ملف الرصد — إيميل، اسم عربي، اسم إنجليزي، مدرسة، Total Points فقط
+            roster_cols_map = {}
+            for col in combined.columns:
+                h = clean_header(col).lower()
+                if h == "email":
+                    roster_cols_map["Email"] = col
+                elif h == "name":
+                    roster_cols_map["Name (EN)"] = col
+                elif any(x in h for x in ["الاسم الرباعي", "اسم الطالبة", "الاسم والرقم"]):
+                    roster_cols_map["Name (AR)"] = col
+                elif h == "total points":
+                    roster_cols_map["Total Points"] = col
+
+            if roster_cols_map:
+                rdf = pd.DataFrame()
+                rdf["الإيميل"]       = combined.get(roster_cols_map.get("Email", ""), "")
+                rdf["الاسم الإنجليزي"] = combined.get(roster_cols_map.get("Name (EN)", ""), "")
+                rdf["الاسم العربي"]  = combined.get(roster_cols_map.get("Name (AR)", ""), "")
+                rdf["المدرسة"]       = "مدرسة جدحفص الثانوية للبنات"
+                rdf["Total Points"]  = combined.get(roster_cols_map.get("Total Points", ""), "")
+
+                # تنسيق ملف الرصد
+                roster_buf = BytesIO()
+                with pd.ExcelWriter(roster_buf, engine="openpyxl") as wr:
+                    rdf.to_excel(wr, index=False, sheet_name="الرصد")
+                roster_buf.seek(0)
+                wb_r = load_workbook(roster_buf)
+                ws_r = wb_r.active
+                ws_r.sheet_view.rightToLeft = True
+
+                hdr_fill  = PatternFill("solid", fgColor="15396B")
+                alt_fill  = PatternFill("solid", fgColor="EAF6FF")
+                tot_fill  = PatternFill("solid", fgColor="FFF2CC")
+                thin_b    = Border(
+                    left=Side(style="thin", color="AAAAAA"),
+                    right=Side(style="thin", color="AAAAAA"),
+                    top=Side(style="thin", color="AAAAAA"),
+                    bottom=Side(style="thin", color="AAAAAA"),
+                )
+                center_al = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+                for cell in ws_r[1]:
+                    cell.fill      = hdr_fill
+                    cell.font      = Font(bold=True, size=13, color="FFFFFF")
+                    cell.alignment = center_al
+                    cell.border    = thin_b
+                ws_r.row_dimensions[1].height = 40
+
+                for row_idx, row in enumerate(ws_r.iter_rows(min_row=2), start=2):
+                    bg = alt_fill if row_idx % 2 == 0 else PatternFill("solid", fgColor="FFFFFF")
+                    for cell in row:
+                        h_val = clean_header(ws_r.cell(1, cell.column).value).lower()
+                        cell.fill      = tot_fill if "total" in h_val or "points" in h_val else bg
+                        cell.font      = Font(size=12, bold=("total" in h_val or "points" in h_val))
+                        cell.alignment = center_al
+                        cell.border    = thin_b
+                    ws_r.row_dimensions[row_idx].height = 28
+
+                col_widths = {"الإيميل": 32, "الاسم الإنجليزي": 30,
+                              "الاسم العربي": 28, "المدرسة": 32, "Total Points": 14}
+                for cell in ws_r[1]:
+                    key = clean_header(cell.value)
+                    ws_r.column_dimensions[cell.column_letter].width = col_widths.get(key, 18)
+
+                ws_r.freeze_panes = "A2"
+
+                roster_out = BytesIO()
+                wb_r.save(roster_out)
+                roster_out.seek(0)
+
+                st.download_button(
+                    label="📊 تنزيل ملف الرصد (إيميل + اسم + درجة)",
+                    data=roster_out,
+                    file_name=f"{merge_base_name}-رصد.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
 
 
 # =========================
