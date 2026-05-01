@@ -576,6 +576,304 @@ def format_excel_file(
 
 
 # =========================
+# مطابقة الطالبات الذكية
+# =========================
+
+def normalize_arabic(text):
+    """تنظيف النص العربي لتسهيل المطابقة"""
+    if not text or pd.isna(text):
+        return ""
+    text = str(text).strip()
+    # توحيد الأحرف العربية الشائعة
+    text = re.sub(r'[أإآا]', 'ا', text)
+    text = re.sub(r'[ةه]', 'ه', text)
+    text = re.sub(r'[يىئ]', 'ي', text)
+    text = re.sub(r'[ؤو]', 'و', text)
+    # حذف التشكيل
+    text = re.sub(r'[\u064B-\u065F]', '', text)
+    # حذف المسافات الزائدة والمسافات والشرطات
+    text = re.sub(r'[\s\-_]+', ' ', text).strip().lower()
+    return text
+
+
+def normalize_english(text):
+    """تنظيف النص الإنجليزي لتسهيل المطابقة"""
+    if not text or pd.isna(text):
+        return ""
+    text = str(text).strip().lower()
+    text = re.sub(r'[\s\-_]+', ' ', text).strip()
+    return text
+
+
+def normalize_id(text):
+    """تنظيف الرقم الأكاديمي"""
+    if not text or pd.isna(text):
+        return ""
+    text = str(text).strip()
+    # إزالة المسافات والشرطات
+    text = re.sub(r'[\s\-_]+', '', text)
+    return text.lower()
+
+
+def normalize_email(text):
+    """تنظيف الإيميل"""
+    if not text or pd.isna(text):
+        return ""
+    return str(text).strip().lower()
+
+
+def fuzzy_name_match(name1, name2, threshold=0.75):
+    """مطابقة أسماء بنسبة تشابه — بدون مكتبات خارجية"""
+    n1 = normalize_arabic(name1) if any('\u0600' <= c <= '\u06FF' for c in str(name1)) else normalize_english(name1)
+    n2 = normalize_arabic(name2) if any('\u0600' <= c <= '\u06FF' for c in str(name2)) else normalize_english(name2)
+
+    if not n1 or not n2:
+        return False, 0.0
+
+    if n1 == n2:
+        return True, 1.0
+
+    # مطابقة جزئية — هل كل كلمة في الاسم الأقصر موجودة في الأطول؟
+    words1 = set(n1.split())
+    words2 = set(n2.split())
+    if words1 and words2:
+        shorter = words1 if len(words1) <= len(words2) else words2
+        longer = words2 if len(words1) <= len(words2) else words1
+        match_count = sum(1 for w in shorter if any(w in lw or lw in w for lw in longer))
+        ratio = match_count / max(len(shorter), 1)
+        if ratio >= threshold:
+            return True, ratio
+
+    # Levenshtein بسيط
+    len1, len2 = len(n1), len(n2)
+    if max(len1, len2) == 0:
+        return True, 1.0
+    matrix = [[0] * (len2 + 1) for _ in range(len1 + 1)]
+    for i in range(len1 + 1):
+        matrix[i][0] = i
+    for j in range(len2 + 1):
+        matrix[0][j] = j
+    for i in range(1, len1 + 1):
+        for j in range(1, len2 + 1):
+            cost = 0 if n1[i-1] == n2[j-1] else 1
+            matrix[i][j] = min(matrix[i-1][j] + 1, matrix[i][j-1] + 1, matrix[i-1][j-1] + cost)
+    distance = matrix[len1][len2]
+    similarity = 1 - distance / max(len1, len2)
+    return similarity >= threshold, similarity
+
+
+def detect_roster_columns(df_roster):
+    """اكتشاف أعمدة ملف المعنيات تلقائياً"""
+    cols = {
+        'email': None,
+        'name_en': None,
+        'name_ar': None,
+        'student_id': None,
+        'section': None,
+    }
+    for col in df_roster.columns:
+        h = clean_header(col).lower()
+        if any(x in h for x in ['email', 'إيميل', 'ايميل', 'بريد']):
+            cols['email'] = col
+        elif any(x in h for x in ['رقم أكاديمي', 'رقم الاكاديمي', 'الرقم الأكاديمي', 'academic', 'id', 'رقم']):
+            cols['student_id'] = col
+        elif any(x in h for x in ['شعبة', 'فصل', 'section', 'class']):
+            cols['section'] = col
+        elif any(x in h for x in ['اسم', 'name']) and any('\u0600' <= c <= '\u06FF' for c in col):
+            cols['name_ar'] = col
+        elif any(x in h for x in ['name', 'اسم']):
+            if any('\u0600' <= c <= '\u06FF' for c in col):
+                if not cols['name_ar']:
+                    cols['name_ar'] = col
+            else:
+                if not cols['name_en']:
+                    cols['name_en'] = col
+    return cols
+
+
+def detect_response_columns(df_responses):
+    """اكتشاف أعمدة ملف الاستجابات"""
+    cols = {
+        'email': None,
+        'name_en': None,
+        'name_ar': None,
+        'student_id': None,
+    }
+    for col in df_responses.columns:
+        h = clean_header(col).lower()
+        if h == 'email':
+            cols['email'] = col
+        elif h == 'name':
+            cols['name_en'] = col
+        elif any(x in h for x in ['الاسم الرباعي', 'اسم الطالبة', 'الاسم']):
+            cols['name_ar'] = col
+        elif any(x in h for x in ['الرقم الأكاديمي', 'رقم أكاديمي', 'رقم الاكاديمي']):
+            cols['student_id'] = col
+    return cols
+
+
+def match_student(response_row, roster_df, roster_cols, resp_cols):
+    """
+    تطابق صف استجابة واحد مع قائمة المعنيات.
+    تُرجع (matched: bool, score: float, method: str)
+    """
+    best_score = 0.0
+    best_method = ""
+
+    # 1. مطابقة إيميل (الأقوى)
+    if roster_cols['email'] and resp_cols['email']:
+        resp_email = normalize_email(response_row.get(resp_cols['email'], ''))
+        if resp_email:
+            for _, roster_row in roster_df.iterrows():
+                roster_email = normalize_email(roster_row.get(roster_cols['email'], ''))
+                if resp_email == roster_email:
+                    return True, 1.0, "إيميل"
+
+    # 2. مطابقة رقم أكاديمي
+    if roster_cols['student_id'] and resp_cols['student_id']:
+        resp_id = normalize_id(response_row.get(resp_cols['student_id'], ''))
+        if resp_id:
+            for _, roster_row in roster_df.iterrows():
+                roster_id = normalize_id(roster_row.get(roster_cols['student_id'], ''))
+                if resp_id and roster_id and resp_id == roster_id:
+                    return True, 0.98, "رقم أكاديمي"
+
+    # 3. مطابقة اسم عربي
+    if roster_cols['name_ar'] and resp_cols['name_ar']:
+        resp_name_ar = response_row.get(resp_cols['name_ar'], '')
+        if resp_name_ar and not pd.isna(resp_name_ar):
+            for _, roster_row in roster_df.iterrows():
+                matched, score = fuzzy_name_match(resp_name_ar, roster_row.get(roster_cols['name_ar'], ''))
+                if matched and score > best_score:
+                    best_score = score
+                    best_method = f"اسم عربي ({score:.0%})"
+
+    # 4. مطابقة اسم إنجليزي
+    if roster_cols['name_en'] and resp_cols['name_en']:
+        resp_name_en = response_row.get(resp_cols['name_en'], '')
+        if resp_name_en and not pd.isna(resp_name_en):
+            for _, roster_row in roster_df.iterrows():
+                matched, score = fuzzy_name_match(resp_name_en, roster_row.get(roster_cols['name_en'], ''))
+                if matched and score > best_score:
+                    best_score = score
+                    best_method = f"اسم إنجليزي ({score:.0%})"
+
+    if best_score >= 0.75:
+        return True, best_score, best_method
+
+    return False, best_score, "لا توجد مطابقة"
+
+
+def run_attendance_check(df_responses, df_roster, resp_cols, roster_cols):
+    """
+    تشغيل فحص الحضور والغياب وإرجاع النتائج
+    """
+    results = []
+    for idx, row in df_responses.iterrows():
+        matched, score, method = match_student(row, df_roster, roster_cols, resp_cols)
+        email_val = row.get(resp_cols['email'], '') if resp_cols['email'] else ''
+        name_en_val = row.get(resp_cols['name_en'], '') if resp_cols['name_en'] else ''
+        name_ar_val = row.get(resp_cols['name_ar'], '') if resp_cols['name_ar'] else ''
+        id_val = row.get(resp_cols['student_id'], '') if resp_cols['student_id'] else ''
+        results.append({
+            'row_index': idx,
+            'email': email_val,
+            'name_en': name_en_val,
+            'name_ar': name_ar_val,
+            'student_id': id_val,
+            'matched': matched,
+            'match_score': score,
+            'match_method': method,
+        })
+
+    # الطالبات الغائبات (في المعنيات لكن ما قدموا)
+    absent = []
+    roster_emails = set()
+    if roster_cols['email']:
+        roster_emails = set(normalize_email(r) for _, r in df_roster.iterrows()
+                            if r.get(roster_cols['email']))
+
+    submitted_emails = set()
+    if resp_cols['email']:
+        submitted_emails = set(
+            normalize_email(row.get(resp_cols['email'], ''))
+            for _, row in df_responses.iterrows()
+        )
+
+    for _, roster_row in df_roster.iterrows():
+        r_email = normalize_email(roster_row.get(roster_cols['email'], '')) if roster_cols['email'] else ''
+        r_name_ar = roster_row.get(roster_cols['name_ar'], '') if roster_cols['name_ar'] else ''
+        r_name_en = roster_row.get(roster_cols['name_en'], '') if roster_cols['name_en'] else ''
+        r_id = roster_row.get(roster_cols['student_id'], '') if roster_cols['student_id'] else ''
+
+        # تحقق بالإيميل أولاً
+        if r_email and r_email in submitted_emails:
+            continue
+
+        # إذا ما في إيميل، تحقق بالاسم والرقم
+        found = False
+        for res in results:
+            if res['matched']:
+                if r_email and normalize_email(res['email']) == r_email:
+                    found = True
+                    break
+                if r_id and normalize_id(str(r_id)) == normalize_id(str(res['student_id'])):
+                    found = True
+                    break
+
+        if not found:
+            absent.append({
+                'الإيميل': r_email,
+                'الاسم العربي': r_name_ar,
+                'الاسم الإنجليزي': r_name_en,
+                'الرقم الأكاديمي': r_id,
+                'الشعبة': roster_row.get(roster_cols['section'], '') if roster_cols['section'] else '',
+            })
+
+    unauthorized = [r for r in results if not r['matched']]
+    return results, absent, unauthorized
+
+
+def highlight_unauthorized_excel(df_responses, unauthorized_indices):
+    """إنشاء ملف Excel مع تلوين صفوف الغير مصرح لهم"""
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df_responses.to_excel(writer, index=False, sheet_name="الاستجابات")
+
+    output.seek(0)
+    wb = load_workbook(output)
+    ws = wb.active
+
+    red_fill = PatternFill("solid", fgColor="FF9999")
+    yellow_fill = PatternFill("solid", fgColor="FFFF99")
+
+    # رأس الجدول
+    for cell in ws[1]:
+        cell.fill = PatternFill("solid", fgColor="BFEFFF")
+        cell.font = Font(bold=True, size=12)
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    unauthorized_set = set(unauthorized_indices)
+
+    for row_num, row in enumerate(ws.iter_rows(min_row=2), start=2):
+        df_row_idx = row_num - 2
+        is_unauthorized = df_row_idx in unauthorized_set
+        for cell in row:
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.font = Font(size=11)
+            if is_unauthorized:
+                cell.fill = red_fill
+
+    ws.freeze_panes = "A2"
+    ws.row_dimensions[1].height = 45
+
+    final_output = BytesIO()
+    wb.save(final_output)
+    final_output.seek(0)
+    return final_output
+
+
+# =========================
 # ترتيب ملفات التجميع
 # =========================
 def get_part_number(filename):
@@ -693,6 +991,16 @@ def apply_ui_style():
 if not login_screen():
     st.stop()
 
+# تهيئة session_state للمطابقة
+if "attendance_done" not in st.session_state:
+    st.session_state["attendance_done"] = False
+if "attendance_results" not in st.session_state:
+    st.session_state["attendance_results"] = []
+if "absent_list" not in st.session_state:
+    st.session_state["absent_list"] = []
+if "unauthorized_list" not in st.session_state:
+    st.session_state["unauthorized_list"] = []
+
 apply_ui_style()
 
 col_user, col_logout = st.columns([4, 1])
@@ -728,269 +1036,424 @@ with tab1:
         df = pd.read_excel(uploaded_file, engine="openpyxl")
         original_file_name = uploaded_file.name
 
-        st.success(f"تم رفع الملف بنجاح، عدد الاستجابات: {len(df)}")
+        st.success(f"✅ تم رفع ملف الاستجابات بنجاح — عدد الاستجابات: {len(df)}")
 
-        default_new_name = safe_filename(Path(original_file_name).stem)
-        new_base_name = st.text_input(
-            "اكتب اسم الملف الجديد قبل التقسيم",
-            value=default_new_name,
-            help="مثال: تقن106 — ستكون الملفات: تقن106-1، تقن106-2 ...",
-        )
-        new_base_name = safe_filename(new_base_name)
-
-        chunk_size = st.number_input(
-            "عدد الاستجابات في كل ملف",
-            min_value=1,
-            value=10,
-            step=1,
-        )
-
-        all_columns = list(df.columns)
-        auto_hidden_columns = [col for col in all_columns if should_auto_hide(col)]
-
-        extra_hidden_columns = st.multiselect(
-            "اختاري أي أعمدة إضافية تريدين إخفاءها قبل تنزيل الملفات",
-            options=all_columns,
-            default=[],
-        )
-
-        hidden_preview_columns = set(auto_hidden_columns + extra_hidden_columns)
-
-        preview_chunk = df.iloc[0:chunk_size].copy()
-        preview_chunk.insert(0, "رقم", range(1, len(preview_chunk) + 1))
-
-        visible_preview_columns = [
-            col for col in preview_chunk.columns
-            if col not in hidden_preview_columns
-        ]
-
-        st.markdown("<h4 style='text-align:center;'>👁️ معاينة أول ملف بعد الإخفاء</h4>", unsafe_allow_html=True)
-        st.dataframe(preview_chunk[visible_preview_columns], use_container_width=True)
-
-        if auto_hidden_columns:
-            st.info("الأعمدة التي سيخفيها التطبيق تلقائيًا: " + "، ".join([str(c) for c in auto_hidden_columns]))
-
+        # =========================
+        # خطوة 1: مطابقة قائمة المعنيات
+        # =========================
         st.markdown("---")
-        st.markdown("### 🟩 تحديد درجات الأسئلة")
+        st.markdown("### 📋 خطوة 1: مطابقة قائمة الطالبات المعنيات بالامتحان")
 
-        # لا نعتمد على أعلى درجة في الاستجابات كدرجة كبرى؛ لأنها قد تكون درجة طالبة فقط.
-        # نحاول قراءة الدرجة الظاهرة في نص السؤال فقط، والناقص يترك 0.00 ليدخله المستخدم من الإجابة النموذجية.
-        detected_scores, unknown_points = detect_max_scores_from_data(df)
-        templates = load_grade_templates()
-        signature = get_file_signature(df)
-        saved_template = templates.get(signature, {})
+        roster_file = st.file_uploader(
+            "ارفعي ملف Excel لقائمة الطالبات المعنيات بهذا الامتحان",
+            type=["xlsx"],
+            key="roster_file",
+            help="يجب أن يحتوي على أعمدة: الإيميل، الاسم، الرقم الأكاديمي (أو أي منها). سيكتشف البرنامج الأعمدة تلقائياً.",
+        )
 
-        all_points_items = []
-        score_sources = {}
+        attendance_passed = False  # نعرف إذا اجتازت خطوة المطابقة
 
-        for col in df.columns:
-            header = clean_header(col)
-            if is_points_column(header):
-                question_text = find_related_question(header, list(df.columns))
-                saved_value = saved_template.get("max_scores", {}).get(header)
-                visible_score = extract_score_from_text(question_text)
-                detected_value = detected_scores.get(header)
+        if roster_file:
+            df_roster = pd.read_excel(roster_file, engine="openpyxl")
+            st.success(f"✅ تم رفع ملف المعنيات — عدد الطالبات: {len(df_roster)}")
 
-                if saved_value is not None and float(saved_value) > 0:
-                    default_value = saved_value
-                    source = "قالب محفوظ"
-                elif visible_score is not None:
-                    default_value = visible_score
-                    source = "درجة ظاهرة في السؤال"
-                elif detected_value is not None and float(detected_value) > 0:
-                    default_value = detected_value
-                    source = "درجة تلقائية من عمود Points"
+            # اكتشاف الأعمدة تلقائياً
+            roster_cols = detect_roster_columns(df_roster)
+            resp_cols = detect_response_columns(df)
+
+            # عرض الأعمدة المكتشفة
+            with st.expander("🔍 الأعمدة المكتشفة تلقائياً — راجعيها وعدّليها إذا لزم"):
+                col_r1, col_r2 = st.columns(2)
+                with col_r1:
+                    st.markdown("**ملف الاستجابات:**")
+                    all_resp_cols = ["— لا يوجد —"] + list(df.columns)
+                    resp_cols['email'] = st.selectbox("عمود الإيميل", all_resp_cols,
+                        index=all_resp_cols.index(resp_cols['email']) if resp_cols['email'] in all_resp_cols else 0,
+                        key="resp_email_col")
+                    resp_cols['name_en'] = st.selectbox("عمود الاسم الإنجليزي", all_resp_cols,
+                        index=all_resp_cols.index(resp_cols['name_en']) if resp_cols['name_en'] in all_resp_cols else 0,
+                        key="resp_nameen_col")
+                    resp_cols['name_ar'] = st.selectbox("عمود الاسم العربي", all_resp_cols,
+                        index=all_resp_cols.index(resp_cols['name_ar']) if resp_cols['name_ar'] in all_resp_cols else 0,
+                        key="resp_namear_col")
+                    resp_cols['student_id'] = st.selectbox("عمود الرقم الأكاديمي", all_resp_cols,
+                        index=all_resp_cols.index(resp_cols['student_id']) if resp_cols['student_id'] in all_resp_cols else 0,
+                        key="resp_id_col")
+                    # تحويل "لا يوجد" لـ None
+                    for k in resp_cols:
+                        if resp_cols[k] == "— لا يوجد —":
+                            resp_cols[k] = None
+
+                with col_r2:
+                    st.markdown("**ملف المعنيات:**")
+                    all_roster_cols = ["— لا يوجد —"] + list(df_roster.columns)
+                    roster_cols['email'] = st.selectbox("عمود الإيميل", all_roster_cols,
+                        index=all_roster_cols.index(roster_cols['email']) if roster_cols['email'] in all_roster_cols else 0,
+                        key="roster_email_col")
+                    roster_cols['name_en'] = st.selectbox("عمود الاسم الإنجليزي", all_roster_cols,
+                        index=all_roster_cols.index(roster_cols['name_en']) if roster_cols['name_en'] in all_roster_cols else 0,
+                        key="roster_nameen_col")
+                    roster_cols['name_ar'] = st.selectbox("عمود الاسم العربي", all_roster_cols,
+                        index=all_roster_cols.index(roster_cols['name_ar']) if roster_cols['name_ar'] in all_roster_cols else 0,
+                        key="roster_namear_col")
+                    roster_cols['student_id'] = st.selectbox("عمود الرقم الأكاديمي", all_roster_cols,
+                        index=all_roster_cols.index(roster_cols['student_id']) if roster_cols['student_id'] in all_roster_cols else 0,
+                        key="roster_id_col")
+                    roster_cols['section'] = st.selectbox("عمود الشعبة (اختياري)", all_roster_cols,
+                        index=all_roster_cols.index(roster_cols['section']) if roster_cols['section'] in all_roster_cols else 0,
+                        key="roster_section_col")
+                    for k in roster_cols:
+                        if roster_cols[k] == "— لا يوجد —":
+                            roster_cols[k] = None
+
+            if st.button("🔍 تشغيل فحص الحضور والمطابقة", type="primary"):
+                with st.spinner("جاري المطابقة..."):
+                    results, absent_list, unauthorized_list = run_attendance_check(
+                        df, df_roster, resp_cols, roster_cols
+                    )
+                    st.session_state["attendance_results"] = results
+                    st.session_state["absent_list"] = absent_list
+                    st.session_state["unauthorized_list"] = unauthorized_list
+                    st.session_state["attendance_done"] = True
+
+            if st.session_state.get("attendance_done"):
+                results = st.session_state["attendance_results"]
+                absent_list = st.session_state["absent_list"]
+                unauthorized_list = st.session_state["unauthorized_list"]
+
+                total = len(results)
+                matched_count = sum(1 for r in results if r['matched'])
+                unauth_count = len(unauthorized_list)
+                absent_count = len(absent_list)
+
+                # ملخص
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("📩 إجمالي الاستجابات", total)
+                c2.metric("✅ مطابقة ومصرح لهم", matched_count)
+                c3.metric("🚫 غير مصرح لهم", unauth_count)
+                c4.metric("❌ غائبات", absent_count)
+
+                # --- غير مصرح لهم ---
+                if unauthorized_list:
+                    st.error(f"⚠️ تنبيه: يوجد {unauth_count} استجابة من طالبات غير مدرجات في قائمة المعنيات!")
+                    unauth_df = pd.DataFrame([{
+                        "الإيميل": r['email'],
+                        "الاسم الإنجليزي": r['name_en'],
+                        "الاسم العربي": r['name_ar'],
+                        "الرقم الأكاديمي": r['student_id'],
+                        "نسبة التطابق": f"{r['match_score']:.0%}",
+                    } for r in unauthorized_list])
+                    st.dataframe(unauth_df, use_container_width=True)
+
+                    # ملف ملون
+                    unauthorized_indices = [r['row_index'] for r in unauthorized_list]
+                    colored_excel = highlight_unauthorized_excel(df, unauthorized_indices)
+                    st.download_button(
+                        label="⬇️ تنزيل ملف الاستجابات مع تحديد الغير مصرح لهم (باللون الأحمر)",
+                        data=colored_excel,
+                        file_name=f"{safe_filename(Path(original_file_name).stem)}-مراجعة-المصرح-لهم.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
                 else:
-                    default_value = 0
-                    source = "مدخل من المستخدم"
+                    st.success("✅ جميع من قدموا الامتحان مصرح لهم — لا يوجد إيميل غير مصرح له.")
 
-                score_sources[header] = source
+                # --- الغياب ---
+                if absent_list:
+                    st.warning(f"❌ يوجد {absent_count} طالبة غائبة عن الامتحان:")
+                    absent_df = pd.DataFrame(absent_list)
+                    st.dataframe(absent_df, use_container_width=True)
 
-                all_points_items.append({
-                    "عمود الدرجة": header,
-                    "السؤال": question_text,
-                    "الدرجة الكبرى": default_value,
-                    "المصدر": source,
-                    "أعلى درجة موجودة في الملف": detected_value if detected_value is not None else "غير محدد",
-                })
+                    absent_buffer = BytesIO()
+                    absent_df.to_excel(absent_buffer, index=False)
+                    absent_buffer.seek(0)
+                    st.download_button(
+                        label="⬇️ تنزيل قائمة الغياب Excel",
+                        data=absent_buffer,
+                        file_name=f"{safe_filename(Path(original_file_name).stem)}-قائمة-الغياب.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
+                else:
+                    st.success("✅ لا يوجد غياب — جميع الطالبات المعنيات قدّمن الامتحان.")
 
-        if not all_points_items:
-            st.error("ما لقيت أعمدة Points في الملف. تأكدي أن ملف الاستجابات يحتوي أعمدة درجات.")
-            max_scores = {}
-            can_split = False
+                # هل نكمل للتقسيم؟
+                if unauth_count == 0 and absent_count == 0:
+                    st.success("🎉 المطابقة مكتملة بدون أي مشاكل. يمكنك الانتقال لخطوة التقسيم أدناه.")
+                    attendance_passed = True
+                elif unauth_count > 0 or absent_count > 0:
+                    st.info("📌 راجعي النتائج أعلاه. يمكنك المتابعة للتقسيم عبر الزر أدناه.")
+                    if st.checkbox("✅ راجعت النتائج وأريد المتابعة لخطوة التقسيم", key="confirm_proceed"):
+                        attendance_passed = True
         else:
-            st.info("البرنامج يضع الدرجات التلقائية الموجودة في أعمدة Points داخل خانة الدرجة الكبرى، وأي سؤال لا توجد له درجة تلقائية يبقى 0.00 لتدخلين درجته من الإجابة النموذجية.")
-            max_scores = {}
-            excluded_columns = []
-            zero_confirmed = []
+            # لو ما رفعت ملف المعنيات، تخطي الخطوة
+            st.info("💡 يمكنك تخطي هذه الخطوة والانتقال للتقسيم مباشرة.")
+            if st.checkbox("⏩ تخطي فحص المعنيات والانتقال للتقسيم مباشرة", key="skip_roster"):
+                attendance_passed = True
 
-            for idx, item in enumerate(all_points_items, start=1):
-                current_value = item["الدرجة الكبرى"]
-                default_score = float(current_value) if current_value is not None else 0.0
+        if attendance_passed:
+          st.markdown("---")
+          st.markdown("### ✂️ خطوة 2: إعدادات التقسيم")
 
-                with st.container(border=True):
-                    st.markdown(f"**{idx}. عمود الدرجة:** `{item['عمود الدرجة']}`")
-                    st.caption(f"السؤال المرتبط: {item['السؤال']}")
-                    st.caption(f"مصدر الدرجة الحالية: {item['المصدر']}")
+          default_new_name = safe_filename(Path(original_file_name).stem)
+          new_base_name = st.text_input(
+              "اكتب اسم الملف الجديد قبل التقسيم",
+              value=default_new_name,
+              help="مثال: تقن106 — ستكون الملفات: تقن106-1، تقن106-2 ...",
+          )
+          new_base_name = safe_filename(new_base_name)
 
-                    if default_score == 0:
-                        confirm_zero = st.checkbox(
-                            "تأكيد أن هذا العمود لا تُكتب له درجة كبرى / لا يُحسب",
-                            value=False,
-                            key=f"confirm_zero_{signature}_{idx}_{item['عمود الدرجة']}",
-                        )
-                    else:
-                        confirm_zero = False
+          chunk_size = st.number_input(
+              "عدد الاستجابات في كل ملف",
+              min_value=1,
+              value=10,
+              step=1,
+          )
 
-                    score = st.number_input(
-                        "الدرجة الكبرى",
-                        min_value=0.0,
-                        value=default_score,
-                        step=0.5,
-                        key=f"score_{signature}_{idx}_{item['عمود الدرجة']}",
-                    )
+          all_columns = list(df.columns)
+          auto_hidden_columns = [col for col in all_columns if should_auto_hide(col)]
 
-                    if score > 0:
-                        final_score = int(score) if float(score).is_integer() else score
-                        max_scores[item["عمود الدرجة"]] = final_score
+          extra_hidden_columns = st.multiselect(
+              "اختاري أي أعمدة إضافية تريدين إخفاءها قبل تنزيل الملفات",
+              options=all_columns,
+              default=[],
+          )
 
-                        if item["المصدر"] == "مدخل من المستخدم":
-                            score_sources[item["عمود الدرجة"]] = "مدخل من المستخدم"
-                        elif final_score != item["الدرجة الكبرى"]:
-                            score_sources[item["عمود الدرجة"]] = "تم تعديله من المستخدم"
-                        else:
-                            score_sources[item["عمود الدرجة"]] = item["المصدر"]
+          hidden_preview_columns = set(auto_hidden_columns + extra_hidden_columns)
 
-                    elif confirm_zero:
-                        zero_confirmed.append(item["عمود الدرجة"])
-                        excluded_columns.append(item["عمود الدرجة"])
-                        score_sources[item["عمود الدرجة"]] = "مؤكد يدويًا لا يُحسب / مقفل"
+          preview_chunk = df.iloc[0:chunk_size].copy()
+          preview_chunk.insert(0, "رقم", range(1, len(preview_chunk) + 1))
 
-            missing_scores = [
-                item["عمود الدرجة"]
-                for item in all_points_items
-                if item["عمود الدرجة"] not in max_scores
-                and item["عمود الدرجة"] not in zero_confirmed
-            ]
+          visible_preview_columns = [
+              col for col in preview_chunk.columns
+              if col not in hidden_preview_columns
+          ]
 
-            can_split = len(missing_scores) == 0
+          st.markdown("<h4 style='text-align:center;'>👁️ معاينة أول ملف بعد الإخفاء</h4>", unsafe_allow_html=True)
+          st.dataframe(preview_chunk[visible_preview_columns], use_container_width=True)
 
-            if st.button("💾 حفظ قالب الدرجات لهذا الملف"):
-                if can_split:
-                    templates[signature] = {
-                        "file_name": original_file_name,
-                        "new_base_name": new_base_name,
-                        "max_scores": max_scores,
-                        "excluded_columns": excluded_columns,
-                    }
-                    save_grade_templates(templates)
-                    st.success("تم حفظ قالب الدرجات بنجاح ✅")
-                else:
-                    st.error("لازم تكتبين الدرجة الكبرى لكل أعمدة Points قبل الحفظ.")
+          if auto_hidden_columns:
+              st.info("الأعمدة التي سيخفيها التطبيق تلقائيًا: " + "، ".join([str(c) for c in auto_hidden_columns]))
 
-            if not can_split:
-                st.warning("باقي أعمدة بدون درجة كبرى: " + "، ".join(missing_scores))
+          st.markdown("---")
+          st.markdown("### 🟩 تحديد درجات الأسئلة")
 
-        if max_scores:
-            total_exam_score = sum(float(v) for v in max_scores.values())
-            if total_exam_score.is_integer():
-                total_exam_score = int(total_exam_score)
-            st.success(f"📌 الدرجة النهائية للاختبار: {total_exam_score}")
+          # لا نعتمد على أعلى درجة في الاستجابات كدرجة كبرى؛ لأنها قد تكون درجة طالبة فقط.
+          # نحاول قراءة الدرجة الظاهرة في نص السؤال فقط، والناقص يترك 0.00 ليدخله المستخدم من الإجابة النموذجية.
+          detected_scores, unknown_points = detect_max_scores_from_data(df)
+          templates = load_grade_templates()
+          signature = get_file_signature(df)
+          saved_template = templates.get(signature, {})
 
-        with st.expander("عرض الدرجات الكبرى المعتمدة"):
-            if max_scores:
-                total_exam_score = sum(float(v) for v in max_scores.values())
-                if total_exam_score.is_integer():
-                    total_exam_score = int(total_exam_score)
+          all_points_items = []
+          score_sources = {}
 
-                scores_df = pd.DataFrame([
-                    {
-                        "عمود الدرجة": k,
-                        "الدرجة المعتمدة": v,
-                        "المصدر": score_sources.get(k, "مدخل من المستخدم"),
-                    }
-                    for k, v in max_scores.items()
-                ])
+          for col in df.columns:
+              header = clean_header(col)
+              if is_points_column(header):
+                  question_text = find_related_question(header, list(df.columns))
+                  saved_value = saved_template.get("max_scores", {}).get(header)
+                  visible_score = extract_score_from_text(question_text)
+                  detected_value = detected_scores.get(header)
 
-                if "excluded_columns" in locals() and excluded_columns:
-                    excluded_df = pd.DataFrame([
-                        {
-                            "عمود الدرجة": col,
-                            "الدرجة المعتمدة": 0,
-                            "المصدر": score_sources.get(col, "مؤكد يدويًا لا يُحسب / مقفل"),
-                        }
-                        for col in excluded_columns
-                    ])
-                    scores_df = pd.concat([scores_df, excluded_df], ignore_index=True)
+                  if saved_value is not None and float(saved_value) > 0:
+                      default_value = saved_value
+                      source = "قالب محفوظ"
+                  elif visible_score is not None:
+                      default_value = visible_score
+                      source = "درجة ظاهرة في السؤال"
+                  elif detected_value is not None and float(detected_value) > 0:
+                      default_value = detected_value
+                      source = "درجة تلقائية من عمود Points"
+                  else:
+                      default_value = 0
+                      source = "مدخل من المستخدم"
 
-                total_row = pd.DataFrame([
-                    {
-                        "عمود الدرجة": "المجموع الكلي / الدرجة النهائية للاختبار",
-                        "الدرجة المعتمدة": total_exam_score,
-                        "المصدر": "مجموع الدرجات الظاهرة والمدخلة",
-                    }
-                ])
+                  score_sources[header] = source
 
-                scores_df = pd.concat([scores_df, total_row], ignore_index=True)
+                  all_points_items.append({
+                      "عمود الدرجة": header,
+                      "السؤال": question_text,
+                      "الدرجة الكبرى": default_value,
+                      "المصدر": source,
+                      "أعلى درجة موجودة في الملف": detected_value if detected_value is not None else "غير محدد",
+                  })
 
-                st.dataframe(scores_df, use_container_width=True)
-                st.success(f"📌 الدرجة النهائية للاختبار: {total_exam_score}")
-            else:
-                st.info("لا توجد درجات محددة حتى الآن.")
+          if not all_points_items:
+              st.error("ما لقيت أعمدة Points في الملف. تأكدي أن ملف الاستجابات يحتوي أعمدة درجات.")
+              max_scores = {}
+              can_split = False
+          else:
+              st.info("البرنامج يضع الدرجات التلقائية الموجودة في أعمدة Points داخل خانة الدرجة الكبرى، وأي سؤال لا توجد له درجة تلقائية يبقى 0.00 لتدخلين درجته من الإجابة النموذجية.")
+              max_scores = {}
+              excluded_columns = []
+              zero_confirmed = []
 
-        if st.button("✂️ تقسيم الاستجابات وتنزيل الملفات", disabled=not can_split):
-            zip_buffer = BytesIO()
-            part_names = []
-            responses_per_part_list = []
+              for idx, item in enumerate(all_points_items, start=1):
+                  current_value = item["الدرجة الكبرى"]
+                  default_score = float(current_value) if current_value is not None else 0.0
 
-            with ZipFile(zip_buffer, "w") as zip_file:
-                for i in range(0, len(df), chunk_size):
-                    chunk = df.iloc[i:i + chunk_size].copy()
-                    chunk.insert(0, "رقم", range(1, len(chunk) + 1))
+                  with st.container(border=True):
+                      st.markdown(f"**{idx}. عمود الدرجة:** `{item['عمود الدرجة']}`")
+                      st.caption(f"السؤال المرتبط: {item['السؤال']}")
+                      st.caption(f"مصدر الدرجة الحالية: {item['المصدر']}")
 
-                    excel_buffer = BytesIO()
-                    with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
-                        chunk.to_excel(writer, index=False, sheet_name="Responses")
+                      if default_score == 0:
+                          confirm_zero = st.checkbox(
+                              "تأكيد أن هذا العمود لا تُكتب له درجة كبرى / لا يُحسب",
+                              value=False,
+                              key=f"confirm_zero_{signature}_{idx}_{item['عمود الدرجة']}",
+                          )
+                      else:
+                          confirm_zero = False
 
-                    formatted_file = format_excel_file(
-                        excel_buffer,
-                        lock_sheet=True,
-                        merge_mode=False,
-                        extra_hidden_columns=extra_hidden_columns,
-                        max_scores=max_scores,
-                        excluded_columns=excluded_columns,
-                    )
+                      score = st.number_input(
+                          "الدرجة الكبرى",
+                          min_value=0.0,
+                          value=default_score,
+                          step=0.5,
+                          key=f"score_{signature}_{idx}_{item['عمود الدرجة']}",
+                      )
 
-                    file_number = (i // chunk_size) + 1
-                    part_file_name = f"{new_base_name}-{file_number}.xlsx"
-                    part_names.append(part_file_name)
-                    responses_per_part_list.append(str(len(chunk)))
+                      if score > 0:
+                          final_score = int(score) if float(score).is_integer() else score
+                          max_scores[item["عمود الدرجة"]] = final_score
 
-                    zip_file.writestr(part_file_name, formatted_file.getvalue())
+                          if item["المصدر"] == "مدخل من المستخدم":
+                              score_sources[item["عمود الدرجة"]] = "مدخل من المستخدم"
+                          elif final_score != item["الدرجة الكبرى"]:
+                              score_sources[item["عمود الدرجة"]] = "تم تعديله من المستخدم"
+                          else:
+                              score_sources[item["عمود الدرجة"]] = item["المصدر"]
 
-            zip_buffer.seek(0)
-            part_count = len(part_names)
+                      elif confirm_zero:
+                          zero_confirmed.append(item["عمود الدرجة"])
+                          excluded_columns.append(item["عمود الدرجة"])
+                          score_sources[item["عمود الدرجة"]] = "مؤكد يدويًا لا يُحسب / مقفل"
 
-            log_operation(
-                operation_type="تقسيم",
-                original_file=original_file_name,
-                new_file_name=new_base_name,
-                part_names=part_names,
-                part_count=part_count,
-                response_count=len(df),
-                responses_per_part="، ".join(responses_per_part_list),
-                split_done="نعم",
-                merge_done="لا",
-                status="تم",
-            )
+              missing_scores = [
+                  item["عمود الدرجة"]
+                  for item in all_points_items
+                  if item["عمود الدرجة"] not in max_scores
+                  and item["عمود الدرجة"] not in zero_confirmed
+              ]
 
-            st.success(f"تم تقسيم الملف إلى {part_count} ملف ✅")
-            st.download_button(
-                label="⬇️ تنزيل الملفات المقسمة ZIP",
-                data=zip_buffer,
-                file_name=f"{new_base_name}-split_files.zip",
-                mime="application/zip",
-            )
+              can_split = len(missing_scores) == 0
+
+              if st.button("💾 حفظ قالب الدرجات لهذا الملف"):
+                  if can_split:
+                      templates[signature] = {
+                          "file_name": original_file_name,
+                          "new_base_name": new_base_name,
+                          "max_scores": max_scores,
+                          "excluded_columns": excluded_columns,
+                      }
+                      save_grade_templates(templates)
+                      st.success("تم حفظ قالب الدرجات بنجاح ✅")
+                  else:
+                      st.error("لازم تكتبين الدرجة الكبرى لكل أعمدة Points قبل الحفظ.")
+
+              if not can_split:
+                  st.warning("باقي أعمدة بدون درجة كبرى: " + "، ".join(missing_scores))
+
+          if max_scores:
+              total_exam_score = sum(float(v) for v in max_scores.values())
+              if total_exam_score.is_integer():
+                  total_exam_score = int(total_exam_score)
+              st.success(f"📌 الدرجة النهائية للاختبار: {total_exam_score}")
+
+          with st.expander("عرض الدرجات الكبرى المعتمدة"):
+              if max_scores:
+                  total_exam_score = sum(float(v) for v in max_scores.values())
+                  if total_exam_score.is_integer():
+                      total_exam_score = int(total_exam_score)
+
+                  scores_df = pd.DataFrame([
+                      {
+                          "عمود الدرجة": k,
+                          "الدرجة المعتمدة": v,
+                          "المصدر": score_sources.get(k, "مدخل من المستخدم"),
+                      }
+                      for k, v in max_scores.items()
+                  ])
+
+                  if "excluded_columns" in locals() and excluded_columns:
+                      excluded_df = pd.DataFrame([
+                          {
+                              "عمود الدرجة": col,
+                              "الدرجة المعتمدة": 0,
+                              "المصدر": score_sources.get(col, "مؤكد يدويًا لا يُحسب / مقفل"),
+                          }
+                          for col in excluded_columns
+                      ])
+                      scores_df = pd.concat([scores_df, excluded_df], ignore_index=True)
+
+                  total_row = pd.DataFrame([
+                      {
+                          "عمود الدرجة": "المجموع الكلي / الدرجة النهائية للاختبار",
+                          "الدرجة المعتمدة": total_exam_score,
+                          "المصدر": "مجموع الدرجات الظاهرة والمدخلة",
+                      }
+                  ])
+
+                  scores_df = pd.concat([scores_df, total_row], ignore_index=True)
+
+                  st.dataframe(scores_df, use_container_width=True)
+                  st.success(f"📌 الدرجة النهائية للاختبار: {total_exam_score}")
+              else:
+                  st.info("لا توجد درجات محددة حتى الآن.")
+
+          if st.button("✂️ تقسيم الاستجابات وتنزيل الملفات", disabled=not can_split):
+              zip_buffer = BytesIO()
+              part_names = []
+              responses_per_part_list = []
+
+              with ZipFile(zip_buffer, "w") as zip_file:
+                  for i in range(0, len(df), chunk_size):
+                      chunk = df.iloc[i:i + chunk_size].copy()
+                      chunk.insert(0, "رقم", range(1, len(chunk) + 1))
+
+                      excel_buffer = BytesIO()
+                      with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+                          chunk.to_excel(writer, index=False, sheet_name="Responses")
+
+                      formatted_file = format_excel_file(
+                          excel_buffer,
+                          lock_sheet=True,
+                          merge_mode=False,
+                          extra_hidden_columns=extra_hidden_columns,
+                          max_scores=max_scores,
+                          excluded_columns=excluded_columns,
+                      )
+
+                      file_number = (i // chunk_size) + 1
+                      part_file_name = f"{new_base_name}-{file_number}.xlsx"
+                      part_names.append(part_file_name)
+                      responses_per_part_list.append(str(len(chunk)))
+
+                      zip_file.writestr(part_file_name, formatted_file.getvalue())
+
+              zip_buffer.seek(0)
+              part_count = len(part_names)
+
+              log_operation(
+                  operation_type="تقسيم",
+                  original_file=original_file_name,
+                  new_file_name=new_base_name,
+                  part_names=part_names,
+                  part_count=part_count,
+                  response_count=len(df),
+                  responses_per_part="، ".join(responses_per_part_list),
+                  split_done="نعم",
+                  merge_done="لا",
+                  status="تم",
+              )
+
+              st.success(f"تم تقسيم الملف إلى {part_count} ملف ✅")
+              st.download_button(
+                  label="⬇️ تنزيل الملفات المقسمة ZIP",
+                  data=zip_buffer,
+                  file_name=f"{new_base_name}-split_files.zip",
+                  mime="application/zip",
+              )
 
 
 # =========================
@@ -1141,3 +1604,4 @@ st.markdown(f"""
 
 
 """, unsafe_allow_html=True)
+
