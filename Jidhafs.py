@@ -270,27 +270,40 @@ hidden_headers = [
 
 
 def _is_student_info_field(header):
-    """هل هذا الحقل متعلق ببيانات الطالبة (اسم، رقم، شعبة) وليس سؤالاً حقيقياً؟"""
+    """هل هذا الحقل متعلق ببيانات الطالبة/الطالب (اسم، رقم، شعبة) وليس سؤالاً حقيقياً؟"""
     h = clean_header(header).lower()
     return any(x in h for x in [
-        "اسم الطالبة", "الاسم الرباعي", "بيانات الطالبة",
+        # اسم — جميع الصياغات
+        "اسم الطالبة", "اسم الطالب", "اسم الطلاب", "اسم الطالبات",
+        "الاسم الرباعي", "الاسم الثلاثي", "الاسم الكامل",
+        "بيانات الطالبة", "بيانات الطالب", "بيانات الطلاب",
+        "الاسم والرقم", "اسم ورقم",
+        # رقم — جميع الصياغات
         "الرقم الأكاديمي", "رقم الاكاديمي", "رقم أكاديمي",
-        "الشعبة", "student name", "student id", "section",
+        "رقم الطالبة", "رقم الطالب", "الرقم المدرسي",
+        # شعبة / فصل
+        "الشعبة", "شعبة", "الفصل الدراسي", "الفصل",
+        # إنجليزي
+        "student name", "student id", "student number",
+        "class section", "section", "grade level",
     ])
 
 
 def should_auto_hide(header):
-    header_lower = clean_header(header).lower()
+    h = clean_header(header).lower()
+    hidden = [
+        "id", "start time", "completion time", "email", "name",
+        "grade posted time", "last modified time",
+    ]
     return (
-        "feedback" in header_lower
-        or header_lower in hidden_headers
+        "feedback" in h
+        or h in hidden
         or _is_student_info_field(header)
     )
 
 
 def is_points_column(header):
     header_lower = clean_header(header).lower()
-    # أي عمود Points مرتبط ببيانات الطالبة يُستثنى تلقائياً
     if _is_student_info_field(header):
         return False
     return (
