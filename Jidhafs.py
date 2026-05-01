@@ -618,34 +618,40 @@ def format_excel_file(
                 )
 
     # إضافة ورقة معلومات المصححة والمدققة للملفات المقسمة
-    if not merge_mode and (corrector_name or auditor_name):
+    # المطلوب: تظهر خانات فقط، وتُكتب الأسماء يدويًا داخل ملف Excel بعد التنزيل.
+    if not merge_mode:
         if "معلومات" not in wb.sheetnames:
             ws_info = wb.create_sheet("معلومات")
             ws_info.sheet_view.rightToLeft = True
+
             info_header_fill = PatternFill("solid", fgColor="15396B")
             info_fill        = PatternFill("solid", fgColor="EAF6FF")
+            thin_info_border = Border(
+                left=Side(style="thin", color="AAAAAA"),
+                right=Side(style="thin", color="AAAAAA"),
+                top=Side(style="thin", color="AAAAAA"),
+                bottom=Side(style="thin", color="AAAAAA"),
+            )
             bold_white  = Font(bold=True, size=13, color="FFFFFF")
-            bold_blue   = Font(bold=True, size=13, color="15396B")
-            center_align = Alignment(horizontal="center", vertical="center")
+            center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-            rows_data = [
-                ("المدرسة",    school_name),
-                ("اسم المصححة", corrector_name),
-                ("اسم المدققة", auditor_name),
-            ]
-            for r_idx, (label, value) in enumerate(rows_data, start=2):
-                c_label = ws_info.cell(row=r_idx, column=2, value=label)
-                c_value = ws_info.cell(row=r_idx, column=3, value=value)
-                c_label.fill  = info_header_fill
-                c_label.font  = bold_white
-                c_label.alignment = center_align
-                c_value.fill  = info_fill
-                c_value.font  = bold_blue
-                c_value.alignment = center_align
-                ws_info.row_dimensions[r_idx].height = 32
+            headers = ["اسم المصححة", "اسم المدققة"]
+            for col_idx, header_text in enumerate(headers, start=2):
+                c_header = ws_info.cell(row=2, column=col_idx, value=header_text)
+                c_header.fill = info_header_fill
+                c_header.font = bold_white
+                c_header.alignment = center_align
+                c_header.border = thin_info_border
 
-            ws_info.column_dimensions["B"].width = 22
-            ws_info.column_dimensions["C"].width = 35
+                c_blank = ws_info.cell(row=3, column=col_idx, value="")
+                c_blank.fill = info_fill
+                c_blank.alignment = center_align
+                c_blank.border = thin_info_border
+
+                ws_info.column_dimensions[c_header.column_letter].width = 32
+
+            ws_info.row_dimensions[2].height = 34
+            ws_info.row_dimensions[3].height = 34
             ws_info.sheet_state = "visible"
         wb.active = wb["Responses"] if "Responses" in wb.sheetnames else ws
 
@@ -980,6 +986,84 @@ def highlight_unauthorized_excel(df_responses, unauthorized_indices, color="FF99
     wb.save(final_output)
     final_output.seek(0)
     return final_output
+
+
+
+
+def get_single_school_name_from_df(df, school_col=None):
+    """يرجع اسم المدرسة إذا كان الملف يخص مدرسة واحدة، وإلا يرجع متعدد المدارس."""
+    if school_col and school_col in df.columns:
+        values = [str(v).strip() for v in df[school_col].dropna().unique() if str(v).strip()]
+        if len(values) == 1:
+            return values[0]
+        if len(values) > 1:
+            return "متعدد المدارس"
+    return "بدون مدرسة"
+
+
+def format_simple_table_excel(df_table, sheet_name="البيانات", highlight_total=False):
+    """تنسيق عام لملفات Excel الصغيرة مثل الغياب والرصد."""
+    buf = BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as wr:
+        df_table.to_excel(wr, index=False, sheet_name=sheet_name)
+    buf.seek(0)
+
+    wb = load_workbook(buf)
+    ws = wb.active
+    ws.sheet_view.rightToLeft = True
+
+    hdr_fill  = PatternFill("solid", fgColor="15396B")
+    alt_fill  = PatternFill("solid", fgColor="EAF6FF")
+    white_fill = PatternFill("solid", fgColor="FFFFFF")
+    tot_fill  = PatternFill("solid", fgColor="FFF2CC")
+    thin_b    = Border(
+        left=Side(style="thin", color="AAAAAA"),
+        right=Side(style="thin", color="AAAAAA"),
+        top=Side(style="thin", color="AAAAAA"),
+        bottom=Side(style="thin", color="AAAAAA"),
+    )
+    center_al = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    for cell in ws[1]:
+        cell.fill      = hdr_fill
+        cell.font      = Font(bold=True, size=13, color="FFFFFF")
+        cell.alignment = center_al
+        cell.border    = thin_b
+    ws.row_dimensions[1].height = 40
+
+    for row_idx, row in enumerate(ws.iter_rows(min_row=2), start=2):
+        bg = alt_fill if row_idx % 2 == 0 else white_fill
+        for cell in row:
+            header_val = clean_header(ws.cell(1, cell.column).value).lower()
+            is_total = highlight_total and ("total" in header_val or "points" in header_val or "الدرجة" in header_val)
+            cell.fill      = tot_fill if is_total else bg
+            cell.font      = Font(size=12, bold=is_total)
+            cell.alignment = center_al
+            cell.border    = thin_b
+        ws.row_dimensions[row_idx].height = 28
+
+    for col in ws.columns:
+        col_letter = col[0].column_letter
+        max_len = 0
+        for cell in col:
+            if cell.value is not None:
+                max_len = max(max_len, len(str(cell.value)))
+        if max_len <= 15:
+            width = 18
+        elif max_len <= 35:
+            width = 28
+        elif max_len <= 70:
+            width = 38
+        else:
+            width = 50
+        ws.column_dimensions[col_letter].width = width
+
+    ws.freeze_panes = "A2"
+
+    out = BytesIO()
+    wb.save(out)
+    out.seek(0)
+    return out
 
 
 # =========================
@@ -1370,13 +1454,17 @@ with tab1:
                     absent_df = pd.DataFrame(absent_list)
                     st.dataframe(absent_df, use_container_width=True)
 
-                    absent_buffer = BytesIO()
-                    absent_df.to_excel(absent_buffer, index=False)
-                    absent_buffer.seek(0)
+                    # إضافة المدرسة لقائمة الغياب إذا لم تكن موجودة في القائمة الرسمية
+                    absent_school_col = detect_school_column(absent_df)
+                    school_name_for_file = get_single_school_name_from_df(df, school_col)
+                    if not absent_school_col:
+                        absent_df.insert(0, "المدرسة", school_name_for_file)
+
+                    absent_buffer = format_simple_table_excel(absent_df, sheet_name="الغياب")
                     st.download_button(
                         label="⬇️ تنزيل قائمة الغياب Excel",
                         data=absent_buffer,
-                        file_name=f"{safe_filename(Path(original_file_name).stem)}-قائمة-الغياب.xlsx",
+                        file_name=f"{safe_filename(school_name_for_file)}-قائمة-الغياب.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     )
                 else:
@@ -1611,12 +1699,9 @@ with tab1:
                   st.info("لا توجد درجات محددة حتى الآن.")
 
           st.markdown("---")
-          st.markdown("### 👩‍🏫 معلومات المصححة والمدققة")
-          col_c1, col_c2 = st.columns(2)
-          with col_c1:
-              corrector_name = st.text_input("اسم المصححة", key="corrector_name", placeholder="مثال: أ. فاطمة علي")
-          with col_c2:
-              auditor_name = st.text_input("اسم المدققة", key="auditor_name", placeholder="مثال: أ. زينب أحمد")
+          st.info("سيتم إنشاء ورقة باسم (معلومات) داخل كل ملف، وفيها خانات فارغة لاسم المصححة واسم المدققة ليتم تعبئتها يدويًا داخل Excel.")
+          corrector_name = ""
+          auditor_name = ""
 
           if st.button("✂️ تقسيم الاستجابات وتنزيل الملفات", disabled=not can_split):
               zip_buffer = BytesIO()
