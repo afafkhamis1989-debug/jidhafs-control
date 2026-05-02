@@ -35,7 +35,7 @@ def get_version():
 # =========================
 # إعدادات عامة
 # =========================
-st.set_page_config(page_title="مركز التصحيح المركزي", layout="wide")
+st.set_page_config(page_title="مركز مدرسة جدحفص للتصحيح المركزي", layout="wide")
 
 st.markdown("""
 <style>
@@ -77,14 +77,14 @@ APP_DATA_DIR.mkdir(exist_ok=True)
 LOCAL_REPORT_FILE = APP_DATA_DIR / "reports.xlsx"
 GRADE_TEMPLATES_FILE = APP_DATA_DIR / "grade_templates.json"
 
-# ضعي رابط Google Apps Script هنا لاحقًا
-GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby1miY6jZcCNqtYtWZzaSkDVZRSOyeKzl2eN9aGrlnLkRCEC619vL8eLzYstP9pieKo0w/exec"
-
 # كلمة مرور الأدمن
 ADMIN_PASSWORD = "Jidhafs!1825"
 
 # كلمة مرور موحدة للمستخدمين العاديين
 USER_PASSWORD = "User!1234"
+
+# رابط Google Script (اتركه فارغًا أو على القيمة الافتراضية لتعطيل الإرسال للسحابة)
+GOOGLE_SCRIPT_URL = ""
 
 
 # =========================
@@ -123,7 +123,7 @@ def detect_school_column(df):
         "student’s school",
         "اسم المدرسة",
         "المدرسة",
-        "مدرسة الطالبة",
+        "مدرسة الطالب",
         "المدرسة التابع لها",
         "المدرسة التابعة لها",
         "المدرسة الأصلية",
@@ -189,6 +189,12 @@ def login_screen():
     if st.session_state.logged_in:
         return True
 
+    _login_logo_b64 = get_logo_base64()
+    if _login_logo_b64:
+        login_logo_html = f'<img src="data:image/png;base64,{_login_logo_b64}" alt="logo">'
+    else:
+        login_logo_html = '<div class="login-logo-fallback">🏫</div>'
+
     st.markdown(f"""
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
     <style>
@@ -222,14 +228,31 @@ def login_screen():
         margin-bottom: 20px;
         text-align: center;
     }}
-    .login-logo-ring {{
+    .login-logo-wrap {{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 18px auto;
+        width: 110px;
+        height: 110px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #ffffff 0%, #f4f8ff 100%);
+        border: 3px solid var(--accent);
+        box-shadow: 0 6px 20px rgba(13,48,96,0.25);
+        overflow: hidden;
+    }}
+    .login-logo-wrap img {{
+        max-width: 90px;
+        max-height: 90px;
+        object-fit: contain;
+    }}
+    .login-logo-fallback {{
         width: 78px; height: 78px;
         background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
         border-radius: 50%;
         display: flex; align-items: center; justify-content: center;
-        margin: 0 auto 18px auto;
         font-size: 32px;
-        box-shadow: 0 6px 20px rgba(13,48,96,0.25);
+        color: #fff;
     }}
     .login-title {{
         font-family: 'Cairo', sans-serif;
@@ -301,9 +324,9 @@ def login_screen():
     }}
     </style>
     <div class="login-card">
-        <div class="login-logo-ring">🏫</div>
-        <div class="login-title">مركز التصحيح المركزي</div>
-        <div class="login-subtitle">مدرسة جدحفص الثانوية للبنات</div>
+        <div class="login-logo-wrap">{login_logo_html}</div>
+        <div class="login-title">مركز مدرسة جدحفص للتصحيح المركزي</div>
+        <div class="login-subtitle">المنطقة التعليمية(2)</div>
         <div class="login-date-badge">📅 {today}</div>
     </div>
     """, unsafe_allow_html=True)
@@ -451,17 +474,17 @@ hidden_headers = [
 
 
 def _is_student_info_field(header):
-    """هل هذا الحقل متعلق ببيانات الطالبة/الطالب (اسم، رقم، شعبة) وليس سؤالاً حقيقياً؟"""
+    """هل هذا الحقل متعلق ببيانات الطالب/الطالب (اسم، رقم، شعبة) وليس سؤالاً حقيقياً؟"""
     h = clean_header(header).lower()
     return any(x in h for x in [
         # اسم — جميع الصياغات
-        "اسم الطالبة", "اسم الطالب", "اسم الطلاب", "اسم الطالبات",
+        "اسم الطالب", "اسم الطالب", "اسم الطلاب", "اسم الطلاب",
         "الاسم الرباعي", "الاسم الثلاثي", "الاسم الكامل",
-        "بيانات الطالبة", "بيانات الطالب", "بيانات الطلاب",
+        "بيانات الطالب", "بيانات الطالب", "بيانات الطلاب",
         "الاسم والرقم", "اسم ورقم",
         # رقم — جميع الصياغات
         "الرقم الأكاديمي", "رقم الاكاديمي", "رقم أكاديمي",
-        "رقم الطالبة", "رقم الطالب", "الرقم المدرسي",
+        "رقم الطالب", "رقم الطالب", "الرقم المدرسي",
         # شعبة / فصل
         "الشعبة", "شعبة", "الفصل الدراسي", "الفصل",
         # إنجليزي
@@ -476,7 +499,7 @@ def should_auto_hide(header):
         "id", "start time", "completion time", "email", "name",
         "grade posted time", "last modified time",
         "school", "school name", "student school", "student's school", "student’s school",
-        "المدرسة", "اسم المدرسة", "مدرسة الطالبة", "المدرسة التابع لها",
+        "المدرسة", "اسم المدرسة", "مدرسة الطالب", "المدرسة التابع لها",
         "المدرسة التابعة لها", "المدرسة الأصلية", "المدرسة الاصلية",
     ]
     return (
@@ -665,10 +688,10 @@ def format_excel_file(
             for cell in col:
                 cell.fill = total_fill
 
-        # أعمدة الدرجات — نستخدم is_points_column الذي يستثني بيانات الطالبة تلقائياً
+        # أعمدة الدرجات — نستخدم is_points_column الذي يستثني بيانات الطالب تلقائياً
         if is_points_column(original_header):
             if merge_mode:
-                # في التجميع لا نعتمد على max_scores؛ نجمع الدرجات المكتوبة فعليًا في ملفات المصححات
+                # في التجميع لا نعتمد على max_scores؛ نجمع الدرجات المكتوبة فعليًا في ملفات المصححين
                 points_cols_for_total.append(col_letter)
                 for cell in col:
                     cell.fill = points_fill
@@ -738,7 +761,7 @@ def format_excel_file(
 
     # تلوين خلايا الدرجات حسب الحالة:
     # فارغة = أحمر، فيها درجة = أخضر
-    # هذا الجزء يضيف Conditional Formatting فعلي داخل ملف Excel.
+    # هذا الجزء يضيف Conditional Formatting فعّل داخل ملف Excel.
     if not merge_mode:
         from openpyxl.formatting.rule import FormulaRule
         from openpyxl.styles import PatternFill as PF
@@ -787,7 +810,7 @@ def format_excel_file(
                     )
                 )
 
-    # إضافة ورقة معلومات المصححة والمدققة للملفات المقسمة
+    # إضافة ورقة معلومات المصحح والمدقق للملفات المقسمة
     # المطلوب: تظهر خانات فقط، وتُكتب الأسماء يدويًا داخل ملف Excel بعد التنزيل.
     if not merge_mode:
         if "معلومات" not in wb.sheetnames:
@@ -805,7 +828,7 @@ def format_excel_file(
             bold_white  = Font(bold=True, size=13, color="FFFFFF")
             center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-            headers = ["اسم المصححة", "اسم المدققة"]
+            headers = ["اسم المصحح", "اسم المدقق"]
             for col_idx, header_text in enumerate(headers, start=2):
                 c_header = ws_info.cell(row=2, column=col_idx, value=header_text)
                 c_header.fill = info_header_fill
@@ -864,7 +887,7 @@ def format_excel_file(
 
 
 # =========================
-# مطابقة الطالبات الذكية
+# مطابقة الطلاب الذكية
 # =========================
 
 def normalize_arabic(text):
@@ -964,7 +987,7 @@ def fuzzy_name_match(name1, name2, threshold=0.75):
 
 
 def detect_roster_columns(df_roster):
-    """اكتشاف أعمدة ملف المعنيات تلقائياً"""
+    """اكتشاف أعمدة ملف المعنيين تلقائياً"""
     cols = {
         'email': None,
         'name_en': None,
@@ -1006,7 +1029,7 @@ def detect_response_columns(df_responses):
             cols['email'] = col
         elif h == 'name':
             cols['name_en'] = col
-        elif any(x in h for x in ['الاسم الرباعي', 'اسم الطالبة', 'الاسم']):
+        elif any(x in h for x in ['الاسم الرباعي', 'اسم الطالب', 'الاسم']):
             cols['name_ar'] = col
         elif any(x in h for x in ['الرقم الأكاديمي', 'رقم أكاديمي', 'رقم الاكاديمي']):
             cols['student_id'] = col
@@ -1031,9 +1054,9 @@ def run_attendance_check(df_responses, df_roster, resp_cols, roster_cols):
     فحص الحضور والغياب مع ثلاث حالات:
     1. إيميل صحيح + اسم صحيح  → مصرح ✅
     2. إيميل صحيح + اسم مختلف → مصرح لكن تحذير ⚠️ (name_mismatch)
-    3. إيميل غير موجود في المعنيات → غير مصرح ❌
+    3. إيميل غير موجود في المعنيين → غير مصرح ❌
     """
-    # بناء dict: إيميل → بيانات الطالبة من ملف المعنيات
+    # بناء dict: إيميل → بيانات الطالب من ملف المعنيين
     roster_by_email = {}
     if roster_cols['email']:
         for _, r in df_roster.iterrows():
@@ -1095,7 +1118,7 @@ def run_attendance_check(df_responses, df_roster, resp_cols, roster_cols):
             'match_method':  method,
         })
 
-    # الغائبات — في المعنيات لكن إيميلهم ما ظهر في الاستجابات
+    # الغائبين — في المعنيين لكن إيميلهم ما ظهر في الاستجابات
     submitted_email_set = set()
     if resp_cols['email']:
         for _, row in df_responses.iterrows():
@@ -1121,7 +1144,9 @@ def run_attendance_check(df_responses, df_roster, resp_cols, roster_cols):
 
 
 def highlight_unauthorized_excel(df_responses, unauthorized_indices, color="FF9999"):
-    """إنشاء ملف Excel مع تلوين صفوف محددة بلون قابل للتخصيص"""
+    """إنشاء ملف Excel مع تلوين صفوف محددة بلون قابل للتخصيص.
+    مهم: الملف يصدر بدون أي حماية أو قفل، حتى يستطيع المستخدم
+    حذف صفوف غير المصرح لهم يدويًا قبل إعادة رفع الملف للبرنامج."""
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df_responses.to_excel(writer, index=False, sheet_name="الاستجابات")
@@ -1129,6 +1154,7 @@ def highlight_unauthorized_excel(df_responses, unauthorized_indices, color="FF99
     output.seek(0)
     wb = load_workbook(output)
     ws = wb.active
+    ws.sheet_view.rightToLeft = True
 
     red_fill = PatternFill("solid", fgColor=color)
 
@@ -1137,6 +1163,7 @@ def highlight_unauthorized_excel(df_responses, unauthorized_indices, color="FF99
         cell.fill = PatternFill("solid", fgColor="BFEFFF")
         cell.font = Font(bold=True, size=12)
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.protection = Protection(locked=False)
 
     highlighted_set = set(unauthorized_indices)
 
@@ -1146,11 +1173,19 @@ def highlight_unauthorized_excel(df_responses, unauthorized_indices, color="FF99
         for cell in row:
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
             cell.font = Font(size=16)
+            cell.protection = Protection(locked=False)
             if is_highlighted:
                 cell.fill = red_fill
 
     ws.freeze_panes = "A2"
     ws.row_dimensions[1].height = 45
+
+    # إلغاء أي حماية على الورقة بشكل صريح
+    try:
+        ws.protection.disable()
+    except Exception:
+        pass
+    ws.protection.sheet = False
 
     final_output = BytesIO()
     wb.save(final_output)
@@ -1265,7 +1300,7 @@ def detect_base_name_from_parts(files):
 # حساب الدرجات النهائية للرصد والتجميع
 # =========================
 def get_score_columns_for_total(df):
-    """يرجع أعمدة الدرجات الحقيقية فقط، ويستثني Total Points ودرجات بيانات الطالبة."""
+    """يرجع أعمدة الدرجات الحقيقية فقط، ويستثني Total Points ودرجات بيانات الطالب."""
     score_cols = []
     for col in df.columns:
         header = clean_header(col)
@@ -1675,9 +1710,24 @@ def apply_ui_style():
 
     [data-testid="stMarkdownContainer"] h4 {{
         font-family: 'Cairo', sans-serif !important;
-        font-size: 17px !important;
-        font-weight: 700 !important;
+        font-size: 18px !important;
+        font-weight: 800 !important;
         color: var(--primary) !important;
+        text-align: center !important;
+        direction: rtl !important;
+        padding: 12px 18px !important;
+        background: linear-gradient(135deg, #f4f8ff 0%, #fafcff 100%) !important;
+        border-right: 4px solid var(--accent) !important;
+        border-radius: var(--radius-sm) !important;
+        margin: 18px 0 14px 0 !important;
+    }}
+    [data-testid="stMarkdownContainer"] h4,
+    [data-testid="stMarkdownContainer"] h3,
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] li,
+    [data-testid="stMarkdownContainer"] span,
+    [data-testid="stMarkdownContainer"] div {{
+        direction: rtl !important;
     }}
 
     /* ===== الـ Container / Border ===== */
@@ -1786,9 +1836,191 @@ def apply_ui_style():
         background: var(--primary) !important;
     }}
 
+
+    /* ===== مؤشر الخطوات (Stepper) ===== */
+    .steps-wrap {{
+        background: var(--surface-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 18px 20px 14px 20px;
+        margin: 8px 0 20px 0;
+        box-shadow: var(--shadow-sm);
+        direction: rtl !important;
+        text-align: center !important;
+    }}
+    .steps-wrap * {{
+        direction: rtl;
+    }}
+    .steps-title {{
+        font-family: 'Cairo', sans-serif;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text-muted);
+        margin-bottom: 10px;
+        text-align: center;
+    }}
+    .steps-row {{
+        display: flex;
+        align-items: stretch;
+        justify-content: space-between;
+        gap: 6px;
+        flex-wrap: wrap;
+    }}
+    .step-cell {{
+        flex: 1;
+        min-width: 140px;
+        background: #f4f8ff;
+        border: 1.5px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 10px 8px;
+        text-align: center;
+        font-family: 'Cairo', sans-serif;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text-muted);
+        position: relative;
+        transition: all 0.2s;
+    }}
+    .step-cell .step-num {{
+        display: inline-flex;
+        width: 26px; height: 26px;
+        background: var(--border);
+        color: var(--text-muted);
+        border-radius: 50%;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 13px;
+        margin-bottom: 6px;
+    }}
+    .step-cell.active {{
+        background: linear-gradient(135deg, #eaf3ff 0%, #f4f8ff 100%);
+        border-color: var(--primary);
+        color: var(--primary);
+        box-shadow: 0 4px 12px rgba(13,48,96,0.12);
+    }}
+    .step-cell.active .step-num {{
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+        color: #fff;
+    }}
+    .step-cell.done {{
+        background: #e8f8f0;
+        border-color: var(--success);
+        color: var(--success);
+    }}
+    .step-cell.done .step-num {{
+        background: var(--success);
+        color: #fff;
+    }}
+    .step-cell.skipped {{
+        background: #fff4e0;
+        border-color: var(--warning);
+        color: var(--warning);
+        opacity: 0.92;
+    }}
+    .step-cell.skipped .step-num {{
+        background: var(--warning);
+        color: #fff;
+    }}
+    .step-cell.skipped::after {{
+        content: 'متخطى';
+        display: block;
+        font-size: 10px;
+        font-weight: 800;
+        margin-top: 4px;
+        color: var(--warning);
+        letter-spacing: 0.5px;
+    }}
+
+    /* ===== لوحة الإرشادات الرقمية ===== */
+    .flow-guide {{
+        background: linear-gradient(135deg, #eaf3ff 0%, #f4f8ff 100%);
+        border-right: 5px solid var(--accent);
+        border-radius: var(--radius-sm);
+        padding: 14px 22px 14px 18px;
+        margin: 0 0 18px 0;
+        font-family: 'Cairo', sans-serif;
+        font-size: 14px;
+        color: var(--text-main);
+        line-height: 1.9;
+        direction: rtl !important;
+        text-align: right !important;
+        unicode-bidi: embed;
+    }}
+    .flow-guide * {{
+        direction: rtl !important;
+        text-align: right !important;
+        unicode-bidi: embed;
+    }}
+    .flow-guide .fg-title {{
+        font-size: 15px;
+        font-weight: 800;
+        color: var(--primary);
+        margin-bottom: 8px;
+        text-align: right !important;
+    }}
+    .flow-guide ol {{
+        margin: 0 0 0 0;
+        padding: 0 22px 0 0;
+        list-style-position: outside;
+        list-style-type: arabic-indic;
+    }}
+    .flow-guide ol li {{
+        margin: 4px 0;
+        text-align: right !important;
+        direction: rtl !important;
+        padding-right: 4px;
+    }}
+    .flow-guide ol li::marker {{
+        color: var(--primary);
+        font-weight: 800;
+    }}
     /* ===== تمييز الصفحة للـ RTL ===== */
     .stApp {{
-        direction: rtl;
+        direction: rtl !important;
+    }}
+    .stApp * {{
+        unicode-bidi: plaintext;
+    }}
+    .stMarkdown,
+    .stMarkdown p,
+    .stMarkdown li,
+    .stMarkdown ol,
+    .stMarkdown ul,
+    .stMarkdown div,
+    .stMarkdown span,
+    [data-testid="stMarkdownContainer"],
+    [data-testid="stMarkdownContainer"] * {{
+        direction: rtl !important;
+        text-align: right !important;
+    }}
+    /* ضمان المحاذاة الوسطى للعناوين الرئيسية */
+    [data-testid="stMarkdownContainer"] h3,
+    [data-testid="stMarkdownContainer"] h4 {{
+        text-align: center !important;
+    }}
+    /* الحقول النصية */
+    .stTextInput input,
+    .stNumberInput input,
+    .stTextArea textarea {{
+        direction: rtl !important;
+        text-align: right !important;
+    }}
+    /* رسائل التنبيه — RTL */
+    [data-testid="stNotification"],
+    [data-testid="stAlert"],
+    .stSuccess, .stInfo, .stWarning, .stError,
+    div[data-testid="stSuccess"],
+    div[data-testid="stInfo"],
+    div[data-testid="stWarning"],
+    div[data-testid="stError"] {{
+        direction: rtl !important;
+        text-align: right !important;
+    }}
+    /* عناوين Streamlit الافتراضية */
+    .stCaption {{
+        direction: rtl !important;
+        text-align: right !important;
     }}
 
     </style>
@@ -1797,12 +2029,77 @@ def apply_ui_style():
     <div class="hero-banner">
         {logo_html}
         <div class="hero-text">
-            <h1>مركز التصحيح المركزي</h1>
-            <div class="hero-subtitle">مدرسة جدحفص الثانوية للبنات</div>
+            <h1>مركز جدحفص للتصحيح المركزي</h1>
+            <div class="hero-subtitle">المنطقة التعليمية (2)</div>
             <div class="hero-badge">📅 {today}</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+
+# =========================
+# مؤشر الخطوات لتبويب التقسيم
+# =========================
+SPLIT_STEPS = [
+    "رفع ملف الاستجابات",
+    "رفع قائمة المعنيين",
+    "فحص المصرح لهم",
+    "إعادة رفع الملف النظيف",
+    "تحديد الدرجات",
+    "تقسيم وتنزيل",
+]
+
+
+def render_split_stepper(current_step, skipped_steps=None):
+    """يرسم شريط الخطوات أعلى تبويب التقسيم.
+    current_step: 1..6 — الخطوة الحالية.
+    skipped_steps: مجموعة أرقام الخطوات التي تم تخطيها."""
+    if skipped_steps is None:
+        skipped_steps = set()
+    cells_html = ""
+    for idx, label in enumerate(SPLIT_STEPS, start=1):
+        if idx in skipped_steps:
+            cls = "step-cell skipped"
+            num_html = '<span class="step-num">↷</span>'
+        elif idx < current_step:
+            cls = "step-cell done"
+            num_html = '<span class="step-num">✓</span>'
+        elif idx == current_step:
+            cls = "step-cell active"
+            num_html = '<span class="step-num">' + str(idx) + '</span>'
+        else:
+            cls = "step-cell"
+            num_html = '<span class="step-num">' + str(idx) + '</span>'
+        cells_html += '<div class="' + cls + '">' + num_html + '<div>' + label + '</div></div>'
+
+    html = (
+        '<div class="steps-wrap">'
+        '<div class="steps-title">📍 خطوات التقسيم — أنت الآن في الخطوة رقم '
+        + str(current_step) + ' من ' + str(len(SPLIT_STEPS))
+        + '</div>'
+        + '<div class="steps-row">' + cells_html + '</div>'
+        + '</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
+def render_flow_guide():
+    """لوحة إرشادية مختصرة تشرح التسلسل قبل البدء."""
+    html = (
+        '<div class="flow-guide">'
+        '<div class="fg-title">📋 تسلسل العمل — اقرأ قبل البدء</div>'
+        '<ol>'
+        '<li>ارفع ملف الاستجابات الأصلي (Excel من الفورم).</li>'
+        '<li>ارفع قائمة الطلاب المعنيين بالامتحان.</li>'
+        '<li>اضغط زر "تشغيل فحص الحضور" — البرنامج يبيّن لك: المصرح لهم، الأسماء المختلفة، غير المصرح لهم، الغائبين.</li>'
+        '<li>إذا طلع غير مصرح لهم: نزّل ملف الاستجابات مع التحديد الأحمر، افتحه في Excel، احذف الصفوف الحمراء يدوياً، احفظه.</li>'
+        '<li>ارفع الملف بعد التنظيف في خانة "إعادة الرفع" — البرنامج يتحقق من جديد. لازم العدد يصير صفر.</li>'
+        '<li>حدد الدرجة الكبرى لكل سؤال (البرنامج يعبئ المتاح تلقائياً).</li>'
+        '<li>اضغط زر التقسيم — راح تنزل لك ملفات ZIP جاهزة للمصححين.</li>'
+        '</ol>'
+        '</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
 
 
 # =========================
@@ -1846,8 +2143,38 @@ else:
 with tab1:
     st.markdown("<h3>✂️ تقسيم ملف الاستجابات</h3>", unsafe_allow_html=True)
 
+    # مجموعة الخطوات المتخطاة في session_state
+    if "skipped_steps" not in st.session_state:
+        st.session_state["skipped_steps"] = set()
+    _skipped = st.session_state["skipped_steps"]
+
+    # تحديد الخطوة الحالية بناءً على حالة الجلسة
+    if not st.session_state.get("split_file"):
+        _current_step = 1
+    elif st.session_state.get("skip_to_split"):
+        _current_step = 6
+    elif 2 in _skipped or st.session_state.get("skip_roster"):
+        if not st.session_state.get("scores_finalized"):
+            _current_step = 5
+        else:
+            _current_step = 6
+    elif not st.session_state.get("roster_file"):
+        _current_step = 2
+    elif not st.session_state.get("attendance_done"):
+        _current_step = 3
+    elif st.session_state.get("unauthorized_list") and not st.session_state.get("clean_reupload_ok") and 4 not in _skipped:
+        _current_step = 4
+    elif not st.session_state.get("scores_finalized") and 5 not in _skipped:
+        _current_step = 5
+    else:
+        _current_step = 6
+
+    render_split_stepper(_current_step, _skipped)
+    render_flow_guide()
+
+    st.markdown("#### 1️⃣ ارفع ملف الاستجابات الأصلي")
     uploaded_file = st.file_uploader(
-        "ارفع ملف Excel الأصلي للاستجابات",
+        "اختر ملف Excel الأصلي للاستجابات (ناتج فورم الامتحان)",
         type=["xlsx"],
         key="split_file",
     )
@@ -1855,6 +2182,32 @@ with tab1:
     if uploaded_file:
         df = pd.read_excel(uploaded_file, engine="openpyxl")
         original_file_name = uploaded_file.name
+
+        # =====================================================
+        # تخطي شامل لكل الخطوات والذهاب مباشرة للتقسيم
+        # =====================================================
+        with st.container(border=True):
+            cs1, cs2 = st.columns([3, 2])
+            with cs1:
+                st.markdown(
+                    "<div style='text-align:right; direction:rtl; font-weight:700; color:#0d3060;'>"
+                    "⏩ <b>وضع التقسيم السريع</b> — تخطي خطوات الفحص والمطابقة والذهاب مباشرة للتقسيم"
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+                st.caption("اختر هذا الوضع إذا كنت تريد تقسيم الاستجابات فقط بدون فحص المعنيين أو غير المصرح لهم.")
+            with cs2:
+                _skip_all = st.checkbox(
+                    "تفعيل التقسيم السريع",
+                    value=st.session_state.get("skip_to_split", False),
+                    key="skip_to_split",
+                )
+        if st.session_state.get("skip_to_split"):
+            st.session_state["skipped_steps"].update({2, 3, 4})
+        else:
+            st.session_state["skipped_steps"].discard(2)
+            st.session_state["skipped_steps"].discard(3)
+            # 4 يُحدد لاحقاً
 
         # =========================
         # تحديد مدرسة الاستجابات
@@ -1868,214 +2221,297 @@ with tab1:
             skip_school = st.checkbox(
                 "⏭️ تخطي تحديد اسم المدرسة والانتقال للخطوة التالية",
                 key=f"skip_school_{original_file_name}",
-                help="استخدمي هذا الخيار إذا كان الامتحان لا يحتاج رصد المدرسة أو سيتم التعامل معها لاحقًا.",
+                help="استخدم هذا الخيار إذا كان الامتحان لا يحتاج رصد المدرسة أو سيتم التعامل معها لاحقًا.",
             )
 
             if skip_school:
                 school_col = None
-                st.info("تم تخطي خطوة تحديد المدرسة بإقرار منك. لن يضيف البرنامج عمود المدرسة لهذا الملف.")
+                st.info("تم تخطي خطوة تحديد المدرسة بإقرارك. لن يضيف البرنامج عمود المدرسة لهذا الملف.")
             else:
                 selected_school = st.selectbox(
-                    "اختاري المدرسة صاحبة ملف الاستجابات",
+                    "اختر المدرسة صاحب ملف الاستجابات",
                     SCHOOL_OPTIONS,
                     key=f"school_select_{original_file_name}",
                 )
                 df["المدرسة"] = selected_school
                 school_col = "المدرسة"
-                st.info(f"تمت إضافة عمود المدرسة لكل الاستجابات: {selected_school} — وسيكون مخفيًا عن المصححات.")
+                st.info(f"تمت إضافة عمود المدرسة لكل الاستجابات: {selected_school} — وسيكون مخفيًا عن المصححين.")
 
         st.success(f"✅ تم رفع ملف الاستجابات بنجاح — عدد الاستجابات: {len(df)}")
 
         # =========================
-        # خطوة 1: مطابقة قائمة المعنيات
+        # خطوة 2/3: مطابقة قائمة المعنيين (مع إمكانية التخطي)
         # =========================
-        st.markdown("---")
-        st.markdown("### 📋 خطوة 1: مطابقة قائمة الطالبات المعنيات بالامتحان")
+        attendance_passed = False
+        if st.session_state.get("skip_to_split"):
+            attendance_passed = True
+            st.info("⏩ تم تخطي خطوات فحص المعنيين والمصرح لهم. ستنتقل مباشرة للتقسيم.")
+        else:
+            st.markdown("---")
+            st.markdown("#### 2️⃣ ارفع قائمة الطلاب المعنيين بالامتحان وشغّل الفحص")
 
-        roster_file = st.file_uploader(
-            "ارفعي ملف Excel لقائمة الطالبات المعنيات بهذا الامتحان",
-            type=["xlsx"],
-            key="roster_file",
-            help="يجب أن يحتوي على أعمدة: الإيميل، الاسم، الرقم الأكاديمي (أو أي منها). سيكتشف البرنامج الأعمدة تلقائياً.",
-        )
+            roster_file = st.file_uploader(
+                "ارفع ملف Excel لقائمة الطلاب المعنيين بهذا الامتحان",
+                type=["xlsx"],
+                key="roster_file",
+                help="يجب أن يحتوي على أعمدة: الإيميل، الاسم، الرقم الأكاديمي (أو أي منها). سيكتشف البرنامج الأعمدة تلقائياً.",
+            )
 
-        attendance_passed = False  # نعرف إذا اجتازت خطوة المطابقة
 
-        if roster_file:
-            df_roster = pd.read_excel(roster_file, engine="openpyxl")
-            st.success(f"✅ تم رفع ملف المعنيات — عدد الطالبات: {len(df_roster)}")
+            if roster_file:
+                df_roster = pd.read_excel(roster_file, engine="openpyxl")
+                st.success(f"✅ تم رفع ملف المعنيين — عدد الطلاب: {len(df_roster)}")
 
-            # اكتشاف الأعمدة تلقائياً — نحفظها في session_state حتى لا تُعاد عند كل rerun
-            sig_key = f"cols_detected_{original_file_name}_{roster_file.name}"
-            if sig_key not in st.session_state:
-                st.session_state[sig_key] = {
-                    'resp': detect_response_columns(df),
-                    'roster': detect_roster_columns(df_roster),
+                # اكتشاف الأعمدة تلقائياً — نحفظها في session_state حتى لا تُعاد عند كل rerun
+                sig_key = f"cols_detected_{original_file_name}_{roster_file.name}"
+                if sig_key not in st.session_state:
+                    st.session_state[sig_key] = {
+                        'resp': detect_response_columns(df),
+                        'roster': detect_roster_columns(df_roster),
+                    }
+
+                detected_resp   = st.session_state[sig_key]['resp']
+                detected_roster = st.session_state[sig_key]['roster']
+
+                all_resp_cols   = ["— لا يوجد —"] + list(df.columns)
+                all_roster_cols = ["— لا يوجد —"] + list(df_roster.columns)
+
+                def _idx(lst, val):
+                    return lst.index(val) if val in lst else 0
+
+                with st.expander("🔍 مراجعة الأعمدة المكتشفة (اضغط للتعديل إذا لزم)", expanded=False):
+                    col_r1, col_r2 = st.columns(2)
+                    with col_r1:
+                        st.markdown("**ملف الاستجابات:**")
+                        st.selectbox("عمود الإيميل",         all_resp_cols, index=_idx(all_resp_cols, detected_resp.get('email')),      key="resp_email_col")
+                        st.selectbox("عمود الاسم الإنجليزي", all_resp_cols, index=_idx(all_resp_cols, detected_resp.get('name_en')),    key="resp_nameen_col")
+                        st.selectbox("عمود الاسم العربي",     all_resp_cols, index=_idx(all_resp_cols, detected_resp.get('name_ar')),    key="resp_namear_col")
+                        st.selectbox("عمود الرقم الأكاديمي", all_resp_cols, index=_idx(all_resp_cols, detected_resp.get('student_id')), key="resp_id_col")
+                    with col_r2:
+                        st.markdown("**ملف المعنيين:**")
+                        st.selectbox("عمود الإيميل",         all_roster_cols, index=_idx(all_roster_cols, detected_roster.get('email')),      key="roster_email_col")
+                        st.selectbox("عمود الاسم الإنجليزي", all_roster_cols, index=_idx(all_roster_cols, detected_roster.get('name_en')),    key="roster_nameen_col")
+                        st.selectbox("عمود الاسم العربي",     all_roster_cols, index=_idx(all_roster_cols, detected_roster.get('name_ar')),    key="roster_namear_col")
+                        st.selectbox("عمود الرقم الأكاديمي", all_roster_cols, index=_idx(all_roster_cols, detected_roster.get('student_id')), key="roster_id_col")
+                        st.selectbox("عمود الشعبة (اختياري)", all_roster_cols, index=_idx(all_roster_cols, detected_roster.get('section')),   key="roster_section_col")
+
+                def _none(k, state_key):
+                    v = st.session_state.get(state_key, "— لا يوجد —")
+                    return None if (not v or v == "— لا يوجد —") else v
+
+                resp_cols = {
+                    'email':      _none('email',      'resp_email_col'),
+                    'name_en':    _none('name_en',    'resp_nameen_col'),
+                    'name_ar':    _none('name_ar',    'resp_namear_col'),
+                    'student_id': _none('student_id', 'resp_id_col'),
+                }
+                roster_cols = {
+                    'email':      _none('email',      'roster_email_col'),
+                    'name_en':    _none('name_en',    'roster_nameen_col'),
+                    'name_ar':    _none('name_ar',    'roster_namear_col'),
+                    'student_id': _none('student_id', 'roster_id_col'),
+                    'section':    _none('section',    'roster_section_col'),
                 }
 
-            detected_resp   = st.session_state[sig_key]['resp']
-            detected_roster = st.session_state[sig_key]['roster']
+                # إحصائية ملف المعنيين
+                roster_total = len(df_roster)
+                st.info(f"📋 عدد الطلاب في قائمة المعنيين: **{roster_total}** طالب")
 
-            all_resp_cols   = ["— لا يوجد —"] + list(df.columns)
-            all_roster_cols = ["— لا يوجد —"] + list(df_roster.columns)
+                if st.button("🔍 تشغيل فحص الحضور والمطابقة", type="primary"):
+                    with st.spinner("جاري المطابقة..."):
+                        results, absent_list, unauthorized_list, name_mismatch_list = run_attendance_check(
+                            df, df_roster, resp_cols, roster_cols
+                        )
+                        st.session_state["attendance_results"] = results
+                        st.session_state["absent_list"] = absent_list
+                        st.session_state["unauthorized_list"] = unauthorized_list
+                        st.session_state["name_mismatch_list"] = name_mismatch_list
+                        st.session_state["attendance_done"] = True
 
-            def _idx(lst, val):
-                return lst.index(val) if val in lst else 0
+                if st.session_state.get("attendance_done"):
+                    results = st.session_state["attendance_results"]
+                    absent_list = st.session_state["absent_list"]
+                    unauthorized_list = st.session_state["unauthorized_list"]
+                    name_mismatch_list = st.session_state.get("name_mismatch_list", [])
 
-            with st.expander("🔍 مراجعة الأعمدة المكتشفة (اضغطي للتعديل إذا لزم)", expanded=False):
-                col_r1, col_r2 = st.columns(2)
-                with col_r1:
-                    st.markdown("**ملف الاستجابات:**")
-                    st.selectbox("عمود الإيميل",         all_resp_cols, index=_idx(all_resp_cols, detected_resp.get('email')),      key="resp_email_col")
-                    st.selectbox("عمود الاسم الإنجليزي", all_resp_cols, index=_idx(all_resp_cols, detected_resp.get('name_en')),    key="resp_nameen_col")
-                    st.selectbox("عمود الاسم العربي",     all_resp_cols, index=_idx(all_resp_cols, detected_resp.get('name_ar')),    key="resp_namear_col")
-                    st.selectbox("عمود الرقم الأكاديمي", all_resp_cols, index=_idx(all_resp_cols, detected_resp.get('student_id')), key="resp_id_col")
-                with col_r2:
-                    st.markdown("**ملف المعنيات:**")
-                    st.selectbox("عمود الإيميل",         all_roster_cols, index=_idx(all_roster_cols, detected_roster.get('email')),      key="roster_email_col")
-                    st.selectbox("عمود الاسم الإنجليزي", all_roster_cols, index=_idx(all_roster_cols, detected_roster.get('name_en')),    key="roster_nameen_col")
-                    st.selectbox("عمود الاسم العربي",     all_roster_cols, index=_idx(all_roster_cols, detected_roster.get('name_ar')),    key="roster_namear_col")
-                    st.selectbox("عمود الرقم الأكاديمي", all_roster_cols, index=_idx(all_roster_cols, detected_roster.get('student_id')), key="roster_id_col")
-                    st.selectbox("عمود الشعبة (اختياري)", all_roster_cols, index=_idx(all_roster_cols, detected_roster.get('section')),   key="roster_section_col")
+                    total = len(results)
+                    matched_count = sum(1 for r in results if r['matched'])
+                    unauth_count = len(unauthorized_list)
+                    absent_count = len(absent_list)
+                    mismatch_count = len(name_mismatch_list)
 
-            def _none(k, state_key):
-                v = st.session_state.get(state_key, "— لا يوجد —")
-                return None if (not v or v == "— لا يوجد —") else v
+                    # ملخص
+                    c1, c2, c3, c4, c5 = st.columns(5)
+                    c1.metric("📩 إجمالي الاستجابات", total)
+                    c2.metric("✅ مصرح واسم صحيح", matched_count - mismatch_count)
+                    c3.metric("⚠️ إيميل صح / اسم مختلف", mismatch_count)
+                    c4.metric("🚫 غير مصرح لهم", unauth_count)
+                    c5.metric("❌ غائبين", absent_count)
 
-            resp_cols = {
-                'email':      _none('email',      'resp_email_col'),
-                'name_en':    _none('name_en',    'resp_nameen_col'),
-                'name_ar':    _none('name_ar',    'resp_namear_col'),
-                'student_id': _none('student_id', 'resp_id_col'),
-            }
-            roster_cols = {
-                'email':      _none('email',      'roster_email_col'),
-                'name_en':    _none('name_en',    'roster_nameen_col'),
-                'name_ar':    _none('name_ar',    'roster_namear_col'),
-                'student_id': _none('student_id', 'roster_id_col'),
-                'section':    _none('section',    'roster_section_col'),
-            }
+                    # --- إيميل صحيح لكن اسم مختلف ---
+                    if name_mismatch_list:
+                        st.warning(f"⚠️ يوجد {mismatch_count} طالب إيميلها صحيح لكن الاسم المكتوب لا يطابق قائمة المعنيين — راجعها:")
+                        mismatch_df = pd.DataFrame([{
+                            "الإيميل": r['email'],
+                            "الاسم المكتوب في الاستجابة": r['name_en'] or r['name_ar'],
+                            "الاسم المتوقع من القائمة": r['expected_name'],
+                            "طريقة التحقق": r['match_method'],
+                        } for r in name_mismatch_list])
+                        st.dataframe(mismatch_df, use_container_width=True)
 
-            # إحصائية ملف المعنيات
-            roster_total = len(df_roster)
-            st.info(f"📋 عدد الطالبات في قائمة المعنيات: **{roster_total}** طالبة")
+                        mismatch_indices = [r['row_index'] for r in name_mismatch_list]
+                        mismatch_excel = highlight_unauthorized_excel(df, mismatch_indices, color="FFEB99")
+                        st.download_button(
+                            label="⬇️ تنزيل ملف الاستجابات مع تحديد الأسماء المختلفة (باللون الأصفر)",
+                            data=mismatch_excel,
+                            file_name=f"{safe_filename(Path(original_file_name).stem)}-أسماء-مختلفة.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="dl_mismatch",
+                        )
+                    else:
+                        st.success("✅ جميع الأسماء متطابقة مع قائمة المعنيين.")
 
-            if st.button("🔍 تشغيل فحص الحضور والمطابقة", type="primary"):
-                with st.spinner("جاري المطابقة..."):
-                    results, absent_list, unauthorized_list, name_mismatch_list = run_attendance_check(
-                        df, df_roster, resp_cols, roster_cols
-                    )
-                    st.session_state["attendance_results"] = results
-                    st.session_state["absent_list"] = absent_list
-                    st.session_state["unauthorized_list"] = unauthorized_list
-                    st.session_state["name_mismatch_list"] = name_mismatch_list
-                    st.session_state["attendance_done"] = True
+                    # --- غير مصرح لهم ---
+                    if unauthorized_list:
+                        st.error(f"🚫 تنبيه: يوجد {unauth_count} استجابة من طلاب غير مدرجات في قائمة المعنيين!")
+                        unauth_df = pd.DataFrame([{
+                            "الإيميل": r['email'],
+                            "الاسم الإنجليزي": r['name_en'],
+                            "الاسم العربي": r['name_ar'],
+                            "الرقم الأكاديمي": r['student_id'],
+                        } for r in unauthorized_list])
+                        st.dataframe(unauth_df, use_container_width=True)
 
-            if st.session_state.get("attendance_done"):
-                results = st.session_state["attendance_results"]
-                absent_list = st.session_state["absent_list"]
-                unauthorized_list = st.session_state["unauthorized_list"]
-                name_mismatch_list = st.session_state.get("name_mismatch_list", [])
+                        unauthorized_indices = [r['row_index'] for r in unauthorized_list]
+                        colored_excel = highlight_unauthorized_excel(df, unauthorized_indices, color="FF9999")
+                        st.download_button(
+                            label="⬇️ تنزيل ملف الاستجابات مع تحديد الغير مصرح لهم (باللون الأحمر) — الملف غير مقفل",
+                            data=colored_excel,
+                            file_name=f"{safe_filename(Path(original_file_name).stem)}-مراجعة-المصرح-لهم.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="dl_unauth",
+                        )
+                        st.caption("💡 الملف يفتح ويُعدَّل بحرية — احذف الصفوف الحمراء في Excel ثم احفظه باسم جديد أو اكتبه فوقه، وارفعه في الخانة بالأسفل.")
+                    else:
+                        st.success("✅ جميع من قدموا الامتحان مصرح لهم — لا يوجد إيميل غير مصرح له.")
+                        st.session_state["clean_reupload_ok"] = True
 
-                total = len(results)
-                matched_count = sum(1 for r in results if r['matched'])
-                unauth_count = len(unauthorized_list)
-                absent_count = len(absent_list)
-                mismatch_count = len(name_mismatch_list)
+                    # --- الغياب ---
+                    if absent_list:
+                        st.warning(f"❌ يوجد {absent_count} طالب غائب عن الامتحان:")
+                        absent_df = pd.DataFrame(absent_list)
+                        st.dataframe(absent_df, use_container_width=True)
 
-                # ملخص
-                c1, c2, c3, c4, c5 = st.columns(5)
-                c1.metric("📩 إجمالي الاستجابات", total)
-                c2.metric("✅ مصرح واسم صحيح", matched_count - mismatch_count)
-                c3.metric("⚠️ إيميل صح / اسم مختلف", mismatch_count)
-                c4.metric("🚫 غير مصرح لهم", unauth_count)
-                c5.metric("❌ غائبات", absent_count)
+                        # إضافة المدرسة لقائمة الغياب إذا لم تكن موجودة في القائمة الرسمية
+                        absent_school_col = detect_school_column(absent_df)
+                        school_name_for_file = get_single_school_name_from_df(df, school_col)
+                        if not absent_school_col:
+                            absent_df.insert(0, "المدرسة", school_name_for_file)
 
-                # --- إيميل صحيح لكن اسم مختلف ---
-                if name_mismatch_list:
-                    st.warning(f"⚠️ يوجد {mismatch_count} طالبة إيميلها صحيح لكن الاسم المكتوب لا يطابق قائمة المعنيات — راجعيها:")
-                    mismatch_df = pd.DataFrame([{
-                        "الإيميل": r['email'],
-                        "الاسم المكتوب في الاستجابة": r['name_en'] or r['name_ar'],
-                        "الاسم المتوقع من القائمة": r['expected_name'],
-                        "طريقة التحقق": r['match_method'],
-                    } for r in name_mismatch_list])
-                    st.dataframe(mismatch_df, use_container_width=True)
+                        absent_buffer = format_simple_table_excel(absent_df, sheet_name="الغياب")
+                        st.download_button(
+                            label="⬇️ تنزيل قائمة الغياب Excel",
+                            data=absent_buffer,
+                            file_name=f"{safe_filename(school_name_for_file)}-قائمة-الغياب.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        )
+                    else:
+                        st.success("✅ لا يوجد غياب — جميع الطلاب المعنيين قدّموا الامتحان.")
 
-                    mismatch_indices = [r['row_index'] for r in name_mismatch_list]
-                    mismatch_excel = highlight_unauthorized_excel(df, mismatch_indices, color="FFEB99")
-                    st.download_button(
-                        label="⬇️ تنزيل ملف الاستجابات مع تحديد الأسماء المختلفة (باللون الأصفر)",
-                        data=mismatch_excel,
-                        file_name=f"{safe_filename(Path(original_file_name).stem)}-أسماء-مختلفة.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="dl_mismatch",
-                    )
-                else:
-                    st.success("✅ جميع الأسماء متطابقة مع قائمة المعنيات.")
+                    # ===========================================================
+                    # 3️⃣ خطوة الإصلاح: إعادة رفع الملف بعد حذف غير المصرح لهم
+                    # ===========================================================
+                    if unauth_count > 0:
+                        st.markdown("---")
+                        st.markdown("#### 3️⃣ إعادة رفع الملف بعد حذف غير المصرح لهم")
+                        st.info(
+                            "🔧 افتح الملف الأحمر الذي نزّلته بالأعلى، احذف الصفوف الحمراء في Excel، "
+                            "احفظ الملف، ثم ارفعه في الخانة التالية. البرنامج راح يعيد الفحص ويتأكد "
+                            "أن العدد صار صفر قبل ما تكمل للتقسيم."
+                        )
 
-                # --- غير مصرح لهم ---
-                if unauthorized_list:
-                    st.error(f"🚫 تنبيه: يوجد {unauth_count} استجابة من طالبات غير مدرجات في قائمة المعنيات!")
-                    unauth_df = pd.DataFrame([{
-                        "الإيميل": r['email'],
-                        "الاسم الإنجليزي": r['name_en'],
-                        "الاسم العربي": r['name_ar'],
-                        "الرقم الأكاديمي": r['student_id'],
-                    } for r in unauthorized_list])
-                    st.dataframe(unauth_df, use_container_width=True)
+                        cleaned_file = st.file_uploader(
+                            "📤 ارفع نسخة الاستجابات بعد حذف غير المصرح لهم يدوياً",
+                            type=["xlsx"],
+                            key=f"cleaned_resp_{original_file_name}",
+                        )
 
-                    unauthorized_indices = [r['row_index'] for r in unauthorized_list]
-                    colored_excel = highlight_unauthorized_excel(df, unauthorized_indices, color="FF9999")
-                    st.download_button(
-                        label="⬇️ تنزيل ملف الاستجابات مع تحديد الغير مصرح لهم (باللون الأحمر)",
-                        data=colored_excel,
-                        file_name=f"{safe_filename(Path(original_file_name).stem)}-مراجعة-المصرح-لهم.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="dl_unauth",
-                    )
-                else:
-                    st.success("✅ جميع من قدموا الامتحان مصرح لهم — لا يوجد إيميل غير مصرح له.")
+                        if cleaned_file is not None:
+                            try:
+                                df_clean = pd.read_excel(cleaned_file, engine="openpyxl")
+                            except Exception as ex:
+                                st.error(f"تعذّر قراءة الملف: {ex}")
+                                df_clean = None
 
-                # --- الغياب ---
-                if absent_list:
-                    st.warning(f"❌ يوجد {absent_count} طالبة غائبة عن الامتحان:")
-                    absent_df = pd.DataFrame(absent_list)
-                    st.dataframe(absent_df, use_container_width=True)
+                            if df_clean is not None:
+                                if school_col == "المدرسة" and "المدرسة" not in df_clean.columns and "المدرسة" in df.columns:
+                                    df_clean["المدرسة"] = df["المدرسة"].iloc[0]
 
-                    # إضافة المدرسة لقائمة الغياب إذا لم تكن موجودة في القائمة الرسمية
-                    absent_school_col = detect_school_column(absent_df)
-                    school_name_for_file = get_single_school_name_from_df(df, school_col)
-                    if not absent_school_col:
-                        absent_df.insert(0, "المدرسة", school_name_for_file)
+                                results2, absent2, unauth2, mismatch2 = run_attendance_check(
+                                    df_clean, df_roster, resp_cols, roster_cols
+                                )
 
-                    absent_buffer = format_simple_table_excel(absent_df, sheet_name="الغياب")
-                    st.download_button(
-                        label="⬇️ تنزيل قائمة الغياب Excel",
-                        data=absent_buffer,
-                        file_name=f"{safe_filename(school_name_for_file)}-قائمة-الغياب.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    )
-                else:
-                    st.success("✅ لا يوجد غياب — جميع الطالبات المعنيات قدّمن الامتحان.")
+                                cc1, cc2, cc3, cc4 = st.columns(4)
+                                cc1.metric("📩 الاستجابات بعد التنظيف", len(df_clean))
+                                cc2.metric("✅ مصرح لهم", sum(1 for r in results2 if r['matched']))
+                                cc3.metric("🚫 غير مصرح لهم", len(unauth2))
+                                cc4.metric("❌ غائبين", len(absent2))
 
-                # هل نكمل للتقسيم؟
-                if unauth_count == 0 and absent_count == 0 and mismatch_count == 0:
-                    st.success("🎉 المطابقة مكتملة بدون أي مشاكل. يمكنك الانتقال لخطوة التقسيم أدناه.")
-                    attendance_passed = True
-                else:
-                    st.info("📌 راجعي النتائج أعلاه. يمكنك المتابعة للتقسيم عبر الزر أدناه.")
-                    if st.checkbox("✅ راجعت النتائج وأريد المتابعة لخطوة التقسيم", key="confirm_proceed"):
+                                if len(unauth2) == 0:
+                                    st.success(
+                                        "🎉 ممتاز! ما عاد فيه استجابة غير مصرح لها. "
+                                        "هذي هي النسخة التي راح تستخدم في خطوة التقسيم."
+                                    )
+                                    df = df_clean.reset_index(drop=True)
+                                    st.session_state["clean_reupload_ok"] = True
+                                    attendance_passed = True
+                                else:
+                                    st.error(
+                                        f"⚠️ ما زال هناك {len(unauth2)} استجابة غير مصرح لها في الملف. "
+                                        "راجع وأعد الحذف ثم ارفع الملف من جديد."
+                                    )
+                                    unauth2_df = pd.DataFrame([{
+                                        "الإيميل": r['email'],
+                                        "الاسم": r['name_en'] or r['name_ar'],
+                                        "الرقم الأكاديمي": r['student_id'],
+                                    } for r in unauth2])
+                                    st.dataframe(unauth2_df, use_container_width=True)
+                                    st.session_state["clean_reupload_ok"] = False
+                        else:
+                            st.caption("📥 لا يمكن المتابعة للتقسيم قبل رفع نسخة الاستجابات النظيفة (بدون غير مصرح لهم).")
+                    else:
+                        st.session_state["clean_reupload_ok"] = True
+
+                    # هل نكمل للتقسيم؟
+                    if unauth_count == 0 and absent_count == 0 and mismatch_count == 0:
+                        st.success("🎉 المطابقة مكتملة بدون أي مشاكل. يمكنك الانتقال لخطوة التقسيم أدناه.")
                         attendance_passed = True
-        else:
-            # لو ما رفعت ملف المعنيات، تخطي الخطوة
-            st.info("💡 يمكنك تخطي هذه الخطوة والانتقال للتقسيم مباشرة.")
-            if st.checkbox("⏩ تخطي فحص المعنيات والانتقال للتقسيم مباشرة", key="skip_roster"):
-                attendance_passed = True
+                    elif unauth_count == 0:
+                        if not attendance_passed:
+                            st.info("📌 لا يوجد غير مصرح لهم. الغياب وأسماء مختلفة لا تمنع التقسيم.")
+                            if st.checkbox("✅ راجعت النتائج وأريد المتابعة لخطوة التقسيم", key="confirm_proceed_clean"):
+                                attendance_passed = True
+                    else:
+                        if not attendance_passed:
+                            st.warning("⚠️ يلزم رفع نسخة نظيفة من الاستجابات (الخطوة 3) قبل التقسيم.")
+            else:
+                # لو ما رفعت ملف المعنيين، تخطي الخطوة
+                st.info("💡 يمكنك تخطي هذه الخطوة والانتقال للتقسيم مباشرة.")
+                if st.checkbox("⏩ تخطي فحص المعنيين والانتقال للتقسيم مباشرة", key="skip_roster"):
+                    attendance_passed = True
+                    st.session_state["skipped_steps"].update({2, 3, 4})
+                else:
+                    st.session_state["skipped_steps"].discard(2)
+                    st.session_state["skipped_steps"].discard(3)
+                    st.session_state["skipped_steps"].discard(4)
 
         if attendance_passed:
+          # ضمان قيم افتراضية لتجنب NameError
+          max_scores = {}
+          excluded_columns = []
+          can_split = False
           st.markdown("---")
-          st.markdown("### ✂️ خطوة 2: إعدادات التقسيم")
+          st.markdown("#### 4️⃣ تحديد الدرجات وإعدادات التقسيم")
 
           default_new_name = safe_filename(Path(original_file_name).stem)
           new_base_name = st.text_input(
@@ -2096,7 +2532,7 @@ with tab1:
           auto_hidden_columns = [col for col in all_columns if should_auto_hide(col)]
 
           extra_hidden_columns = st.multiselect(
-              "اختاري أي أعمدة إضافية تريدين إخفاءها قبل تنزيل الملفات",
+              "اختر أي أعمدة إضافية تريد إخفاءها قبل تنزيل الملفات",
               options=all_columns,
               default=[],
           )
@@ -2118,9 +2554,9 @@ with tab1:
               st.info("الأعمدة التي سيخفيها التطبيق تلقائيًا: " + "، ".join([str(c) for c in auto_hidden_columns]))
 
           st.markdown("---")
-          st.markdown("### 🟩 تحديد درجات الأسئلة")
+          st.markdown("#### 5️⃣ تحديد الدرجة الكبرى لكل سؤال")
 
-          # لا نعتمد على أعلى درجة في الاستجابات كدرجة كبرى؛ لأنها قد تكون درجة طالبة فقط.
+          # لا نعتمد على أعلى درجة في الاستجابات كدرجة كبرى؛ لأنها قد تكون درجة طالب فقط.
           # نحاول قراءة الدرجة الظاهرة في نص السؤال فقط، والناقص يترك 0.00 ليدخله المستخدم من الإجابة النموذجية.
           detected_scores, unknown_points = detect_max_scores_from_data(df)
           templates = load_grade_templates()
@@ -2162,11 +2598,11 @@ with tab1:
                   })
 
           if not all_points_items:
-              st.error("ما لقيت أعمدة Points في الملف. تأكدي أن ملف الاستجابات يحتوي أعمدة درجات.")
+              st.error("ما لقيت أعمدة Points في الملف. تأكد أن ملف الاستجابات يحتوي أعمدة درجات.")
               max_scores = {}
               can_split = False
           else:
-              st.info("البرنامج يضع الدرجات التلقائية الموجودة في أعمدة Points داخل خانة الدرجة الكبرى، وأي سؤال لا توجد له درجة تلقائية يبقى 0.00 لتدخلين درجته من الإجابة النموذجية.")
+              st.info("البرنامج يضع الدرجات التلقائية الموجودة في أعمدة Points داخل خانة الدرجة الكبرى، وأي سؤال لا توجد له درجة تلقائية يبقى 0.00 لتادخلن درجته من الإجابة النموذجية.")
               max_scores = {}
               excluded_columns = []
               zero_confirmed = []
@@ -2233,7 +2669,7 @@ with tab1:
                       save_grade_templates(templates)
                       st.success("تم حفظ قالب الدرجات بنجاح ✅")
                   else:
-                      st.error("لازم تكتبين الدرجة الكبرى لكل أعمدة Points قبل الحفظ.")
+                      st.error("لازم تكتب الدرجة الكبرى لكل أعمدة Points قبل الحفظ.")
 
               if not can_split:
                   st.warning("باقي أعمدة بدون درجة كبرى: " + "، ".join(missing_scores))
@@ -2288,11 +2724,35 @@ with tab1:
                   st.info("لا توجد درجات محددة حتى الآن.")
 
           st.markdown("---")
-          st.info("سيتم إنشاء ورقة باسم (معلومات) داخل كل ملف، وفيها خانات فارغة لاسم المصححة واسم المدققة ليتم تعبئتها يدويًا داخل Excel.")
+          st.info("سيتم إنشاء ورقة باسم (معلومات) داخل كل ملف، وفيها خانات فارغة لاسم المصحح واسم المدقق ليتم تعبئتها يدويًا داخل Excel.")
           corrector_name = ""
           auditor_name = ""
 
-          if st.button("✂️ تقسيم الاستجابات وتنزيل الملفات", disabled=not can_split):
+          if max_scores and can_split:
+              st.session_state["scores_finalized"] = True
+
+          # خيار تخطي تحديد الدرجات بالكامل
+          skip_scores = st.checkbox(
+              "⏩ تخطي تحديد الدرجات والتقسيم مباشرة (ستُقسم الاستجابات بدون التحقق من درجات الأسئلة)",
+              key="skip_scores",
+          )
+          if skip_scores:
+              st.session_state["skipped_steps"].add(5)
+              st.session_state["scores_finalized"] = True
+              can_split = True  # تجاوز التحقق
+              if not max_scores:
+                  max_scores = {}  # درجات فارغة
+                  excluded_columns = []
+              st.warning("⚠️ تم تخطي تحديد الدرجات. ستُقسم الملفات بدون أعمدة درجات معتمدة.")
+          else:
+              st.session_state["skipped_steps"].discard(5)
+
+          st.markdown("#### 6️⃣ تقسيم الاستجابات وتنزيل الملفات")
+          if st.session_state.get("skipped_steps"):
+              _skipped_labels = [f"({n}) {SPLIT_STEPS[n-1]}" for n in sorted(st.session_state["skipped_steps"]) if n <= len(SPLIT_STEPS)]
+              if _skipped_labels:
+                  st.info("⏩ الخطوات المتخطاة في هذه الجلسة: " + " — ".join(_skipped_labels))
+          if st.button("✂️ تقسيم الاستجابات وتنزيل الملفات", disabled=not can_split, type="primary"):
               zip_buffer = BytesIO()
               part_names = []
               responses_per_part_list = []
@@ -2356,7 +2816,7 @@ with tab2:
     st.markdown("<h3>📥 تجميع ملفات الاستجابات المقسمة</h3>", unsafe_allow_html=True)
 
     uploaded_files = st.file_uploader(
-        "ارفعي ملفات Excel المقسمة",
+        "ارفع ملفات Excel المقسمة",
         type=["xlsx"],
         accept_multiple_files=True,
         key="merge_files",
@@ -2385,7 +2845,7 @@ with tab2:
         if recalculated_total_col:
             st.info(f"✅ تم حساب الدرجة النهائية تلقائيًا من {len(recalculated_score_cols)} أعمدة درجات، وسيظهر عمود Total Points في ملف الرصد.")
         else:
-            st.warning("⚠️ لم يتم العثور على أعمدة Points لحساب الدرجة النهائية. تأكدي من رفع ملفات التصحيح المقسمة الصحيحة.")
+            st.warning("⚠️ لم يتم العثور على أعمدة Points لحساب الدرجة النهائية. تأكد من رفع ملفات التصحيح المقسمة الصحيحة.")
         st.dataframe(combined.head(), use_container_width=True)
 
         if st.button("📥 تجميع وتنزيل الملف"):
@@ -2436,7 +2896,7 @@ with tab2:
 
             email_col   = _get_col(combined, ["email"])
             nameen_col  = _get_col(combined, ["^name$"]) or _get_col(combined, ["name"])
-            namear_col  = _get_col(combined, ["الاسم الرباعي","اسم الطالبة","الاسم الثلاثي","الاسم الكامل","الاسم والرقم","بيانات الطالبة"])
+            namear_col  = _get_col(combined, ["الاسم الرباعي","اسم الطالب","الاسم الثلاثي","الاسم الكامل","الاسم والرقم","بيانات الطالب"])
             school_col  = detect_school_column(combined)
             total_col   = recalculated_total_col or _get_col(combined, ["total points"])
 
@@ -2608,4 +3068,5 @@ st.markdown(f"""
 </div>
 
 """, unsafe_allow_html=True)
+
 
