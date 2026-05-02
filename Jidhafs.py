@@ -84,7 +84,7 @@ ADMIN_PASSWORD = "Jidhafs!1825"
 USER_PASSWORD = "User!1234"
 
 # رابط Google Script (اتركه فارغًا أو على القيمة الافتراضية لتعطيل الإرسال للسحابة)
-GOOGLE_SCRIPT_URL = ""
+GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyYjNvSLwpuxtvajvJ430VCngOsqrR05NhRsx0-NISTrzS4-jC32ueZ73WDq1o7gyEzzg/exec"
 
 
 # =========================
